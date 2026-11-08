@@ -86,6 +86,12 @@
   function kpi(value, label) { return el('div', { class: 'kpi' }, el('b', {}, value), el('span', {}, label)); }
 
   function refresh() {
+    refreshMain();
+    if (FS.uiThermal) FS.uiThermal.refresh();
+    if (FS.uiDaylight) FS.uiDaylight.refresh();
+    if (FS.uiReport) FS.uiReport.refresh();
+  }
+  function refreshMain() {
     if (!ui.main) return;
     const P = FS.project.get(), D = FS.project.derived();
     ui.chipsModel.querySelectorAll('.chip').forEach((c) => c.classList.toggle('on', c.dataset.m === P.solar.model));
@@ -199,7 +205,6 @@
         'point plein : soleil visible à l\'heure pleine, point creux : masqué. Ciel vu depuis ce point : ' + FS.pct(pt.svf) + ' de celui d\'un mur dégagé.'));
     }
     ui.main.append(box);
-    if (FS.uiThermal) FS.uiThermal.refresh();
   }
   let maskLevel = 1;
 

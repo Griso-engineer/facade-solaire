@@ -18,7 +18,7 @@ façade, des masques, des apports et des ordres de grandeur des besoins.
 | 2 | Climat horaire (Open-Meteo ERA5, secours Paris intégré), rayonnement sur façades (Perez) | fait |
 | 3 | Masques des voisins (horizon par point de façade) | fait |
 | 4 | Bilan thermique mensuel (ISO 13790 / 52016-1) et variantes de vitrage | fait |
-| 5 | Lumière naturelle : VSC et facteur de lumière du jour moyen (BRE) | à venir |
+| 5 | Lumière naturelle : VSC et facteur de lumière du jour moyen (BRE) | fait |
 | 6 | Fiche offre A4 paysage | à venir |
 
 ## Lancer en local
@@ -69,6 +69,8 @@ fil des étapes : irradiation contre PVGIS, bilan thermique contre un calcul à 
 | `js/ui-results.js` | Onglet Exposition, coloration de la maquette 3D |
 | `js/thermal.js` | Bilan mensuel quasi-stationnaire (ISO 13790), protections solaires, préréglages de vitrage |
 | `js/ui-thermal.js` | Onglet Thermique : hypothèses, variantes, comparaison |
+| `js/daylight.js` | VSC (BRE) et facteur de lumière du jour moyen (formule BRE simplifiée) |
+| `js/ui-daylight.js` | Onglet Lumière |
 | `js/app.js` | Interface, onglets, enchaînement |
 | `tools/build-climate.html` | Régénère `js/climate-paris.js` (voir ci-dessous) |
 
@@ -145,6 +147,18 @@ fil des étapes : irradiation contre PVGIS, bilan thermique contre un calcul à 
 
 - **Validation** : un cas simple calculé à la main (façade sud de 30 m², janvier et juillet) est
   retrouvé à 0,1 kWh près, en appelant directement la fonction de bilan comme par la chaîne complète.
+
+## Hypothèses et limites : lumière naturelle
+
+> Ordre de grandeur seulement : ni simulation d'éclairement (NF EN 17037), ni étude de droit au jour.
+
+- **VSC** (BRE 209) : ciel couvert CIE, intégré sur le profil d'horizon de chaque point de façade.
+  Mur dégagé 39,6 %. Repères : ≥ 27 % bon, 15–27 % baies à agrandir, 5–15 % difficile, < 5 % très difficile.
+- **FLJm** (formule BRE simplifiée, Littlefair ; BS 8206-2) : `TL · A_w · θ · M / (A · (1 − R²))` pour
+  une pièce type de 4 m × profondeur de zone × 2,7 m, M = 0,9, R = 0,5 ; θ = 90° moins l'élévation
+  moyenne des obstacles pondérée par cos φ (approximation de l'angle de ciel visible).
+- **Validation** : VSC d'un mur dégagé 39,6 % ; obstruction infinie de 25° → 27,3 % (règle des 25° du
+  BRE : 27 %) ; FLJm contre un calcul à la main.
 
 ## Hypothèses et limites : masques
 

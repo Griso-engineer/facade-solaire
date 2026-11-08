@@ -104,11 +104,12 @@
         // valeurs par maille (pour la 3D)
         cells.push({
           g: MS.g, si,
-          v: pv.map((acc) => acc ? {
+          v: pv.map((acc, pi) => acc ? {
             annual: acc.m.reduce((x, y) => x + y, 0),
             winter: WINTER.reduce((x, m) => x + acc.m[m], 0),
             summer: SUMMER.reduce((x, m) => x + acc.m[m], 0),
-            peak: acc.peak
+            peak: acc.peak,
+            vsc: MS.pts[pi].vsc
           } : null)
         });
       });
@@ -147,12 +148,12 @@
       const summer = SUMMER.reduce((a, m) => a + monthly[m], 0);
       const summer0 = SUMMER.reduce((a, m) => a + monthly0[m], 0);
       // facteurs de ciel moyens de la façade
-      let svf = 0, np = 0;
-      for (const ms of MF.segs) for (const p of ms.pts) if (!p.buried) { svf += p.svf; np++; }
+      let svf = 0, vsc = 0, np = 0;
+      for (const ms of MF.segs) for (const p of ms.pts) if (!p.buried) { svf += p.svf; vsc += p.vsc; np++; }
       out.push({
         id: f.id, az: f.az, label: f.label, pignon: f.pignon, area: A, glazed: Ag, wwr: f.wwr,
         monthly, monthly0, annual, annual0, winter, summer, summer0, peak, peak0, peakH, sunHours: sunH,
-        maskLoss: annual0 ? 1 - annual / annual0 : 0, svf: np ? svf / np : 0,
+        maskLoss: annual0 ? 1 - annual / annual0 : 0, svf: np ? svf / np : 0, vsc: np ? vsc / np : 0,
         incident: annual * A,
         gainsAnnual: annual * Ag * opts.g,
         gainsSummer: summer * Ag * opts.g,

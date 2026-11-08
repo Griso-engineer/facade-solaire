@@ -105,8 +105,12 @@
   /* Grandeurs du ciel vu d'un point de mur (normale n) :
      svf : facteur de vue du ciel rapporté au mur dégagé (1 = dégagé) ;
      hb  : part dégagée de la bande d'horizon (élévation < 6°), pondérée par cos. */
+  /* + vsc : composante de ciel verticale (BRE), sous ciel couvert CIE de luminance L ∝ (1 + 2 sin α)/3 :
+           VSC = ∫∫ L cos φ cos²α dα dφ / E_h,  E_h = ∫∫ L sin α cos α dα dφ = 7π/9 ; 39,6 % pour un mur dégagé.
+           ∫ cos²α dα = α/2 + sin 2α/4 ;  ∫ 2 sin α cos²α dα = −2 cos³α / 3.
+     + elev : élévation moyenne des obstacles, pondérée par cos φ (°), pour l'angle de ciel visible θ. */
   function skyFactors(hz, n) {
-    let F = 0, hbn = 0, hbd = 0;
+    let F = 0, hbn = 0, hbd = 0, Ev = 0, el = 0;
     const dphi = RAD;
     for (let k = 0; k < NB; k++) {
       if (hz[k] < 0) continue;
@@ -114,11 +118,14 @@
       const c = Math.sin(a) * n[0] + Math.cos(a) * n[1];
       if (c <= 0) continue;
       const al = hz[k];
-      F += c * dphi * (Math.PI / 4 - (al / 2 + Math.sin(2 * al) / 4));
+      const iCos2 = Math.PI / 4 - (al / 2 + Math.sin(2 * al) / 4);
+      F += c * dphi * iCos2;
+      Ev += c * dphi * (iCos2 + 2 * Math.pow(Math.cos(al), 3) / 3) / 3;
       hbd += c; if (al < 6 * RAD) hbn += c;
+      el += c * al;
     }
     F /= Math.PI;
-    return { svf: Math.min(1, F / 0.5), hb: hbd ? hbn / hbd : 1, F };
+    return { svf: Math.min(1, F / 0.5), hb: hbd ? hbn / hbd : 1, F, vsc: Ev / (7 * Math.PI / 9), elev: hbd ? el / hbd / RAD : 0 };
   }
 
   /* Calcul complet pour le projet : pour chaque segment, ses points, leurs horizons et facteurs.
@@ -137,10 +144,10 @@
             nPts++;
             // point pris dans un voisin plus haut (recouvrement d'emprises OSM) : écarté
             const buried = D.nbs.some((nb) => nb.height > p[2] && p[0] >= nb.bbox[0] && p[0] <= nb.bbox[2] && p[1] >= nb.bbox[1] && p[1] <= nb.bbox[3] && FS.geo.inside(p, nb.xy));
-            if (buried) return { p, buried: true, svf: 0, hb: 0, hz: null };
+            if (buried) return { p, buried: true, svf: 0, hb: 0, vsc: 0, elev: 90, hz: null };
             const hz = horizon(p, s.n, E, s.edge);
             const sf = skyFactors(hz, s.n);
-            return { p, hz, svf: sf.svf, hb: sf.hb, buried: false };
+            return { p, hz, svf: sf.svf, hb: sf.hb, vsc: sf.vsc, elev: sf.elev, buried: false };
           })
         };
       })

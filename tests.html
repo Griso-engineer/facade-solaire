@@ -29,6 +29,7 @@
   <script src="js/irradiance.js"></script>
   <script src="js/masks.js"></script>
   <script src="js/thermal.js"></script>
+  <script src="js/daylight.js"></script>
   <script>
   (function () {
     'use strict';
@@ -370,6 +371,26 @@
       const T2 = Object.assign({}, Tt, { protection: { mode: 'fc', fc: 0.25, gtot: 0.1, threshold: 500 } });
       const q2 = FS.thermal.compute(Dm, R2, { monthly: { tTMY: tE } }, T2, 3)[0].facades[0].Qsol;
       near('Protection sous le seuil (400 < 500 W/m²) : sans effet', q2 / q0, 1, 1e-9);
+    }
+
+    // ------------------------------------------------------------------
+    section('7. Lumière naturelle');
+    {
+      const M = FS.masks, RAD = Math.PI / 180;
+      const free = new Float32Array(360);
+      for (let k = 0; k < 360; k++) free[k] = Math.sin((k + 0.5) * RAD) * 0 + Math.cos((k + 0.5) * RAD) * -1 > 0 ? 0 : -1; // mur sud
+      // VSC d'un mur dégagé sous ciel couvert CIE : 39,6 % (valeur de référence du BRE)
+      near('VSC d\'un mur dégagé (référence BRE : 39,6 %)', M.skyFactors(free, [0, -1]).vsc * 100, 39.6, 0.1, ' %');
+      // Obstruction infinie de 25° dans l'axe : le BRE associe cet angle à un VSC d'environ 27 %
+      const p = [0, -5.1, 1.5], n = [0, -1];
+      const dh = 10 * Math.tan(25 * RAD);
+      const E = [{ ax: 1000, ay: -15.1, bx: -1000, by: -15.1, h: 1.5 + dh, self: false, edge: 0 }];
+      const hz = M.horizon(p, n, E, -1);
+      near('Obstruction infinie de 25° : VSC ≈ 27 % (règle des 25° du BRE)', M.skyFactors(hz, n).vsc * 100, 27, 1.5, ' %');
+      // FLJm, calcul à la main : TL 0,78 ; baie 0,4 × 4 m × 3 m × 0,75 = 3,6 m² ; θ = 90° ; M = 0,9 ;
+      // pièce 4 × 5 × 2,7 m → A = 2(20 + 10,8 + 13,5) = 88,6 m² ; R = 0,5 → 1 − R² = 0,75
+      // FLJm = 0,78 × 3,6 × 90 × 0,9 / (88,6 × 0,75) = 227,45 / 66,45 = 3,42 %
+      near('FLJm d\'une pièce type, calcul à la main', FS.daylight.adf({ TL: 0.78, Aw: 3.6, theta: 90, M: 0.9, W: 4, d: 5, h: 2.7, R: 0.5 }), 3.423, 0.002, ' %');
     }
 
     document.getElementById('title').textContent = nKo ? nKo + ' test(s) en échec sur ' + (nOk + nKo) : 'Tous les tests passent (' + nOk + ')';

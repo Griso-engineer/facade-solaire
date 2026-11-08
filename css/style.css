@@ -298,3 +298,4 @@ table.tbl td.hl { font-weight: 800; }
 .chart .val { fill: var(--ink-2); font-weight: 600; }
 .section-title { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; margin: 28px 0 8px; border-top: 1px solid var(--line); padding-top: 12px; }
 .compare td:first-child { min-width: 210px; }
+.chart .refth { stroke: var(--ink-2); stroke-width: 1; stroke-dasharray: 4 3; }

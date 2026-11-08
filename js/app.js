@@ -428,9 +428,23 @@
       <li><b>Validation</b> : cas simple calculé à la main dans <code>tests.html</code> (façade sud 30 m², janvier et juillet),
         retrouvé à 0,1 kWh près par la fonction de bilan et par la chaîne complète.</li>
     </ul>
+    <h3>Lumière naturelle</h3>
+    <p class="note warn">Ordre de grandeur seulement : ni simulation d'éclairement (NF EN 17037), ni étude de droit au jour.</p>
+    <ul>
+      <li><b>VSC</b> (composante de ciel verticale, BRE 209) : part de l'éclairement d'un ciel couvert CIE
+        (luminance ∝ (1 + 2 sin α)/3) reçue sur le plan de la façade, rapportée à l'éclairement horizontal d'un site dégagé.
+        Calculée en chaque point de façade par intégration sur le profil d'horizon de l'étape 3. Mur dégagé : 39,6 %.
+        Repères BRE : ≥ 27 % bon, 15–27 % baies à agrandir, 5–15 % difficile, &lt; 5 % très difficile.</li>
+      <li><b>FLJm</b> (facteur de lumière du jour moyen, formule BRE simplifiée de Littlefair, BS 8206-2) :
+        FLJm = TL · A<sub>w</sub> · θ · M / (A · (1 − R²)), pour une pièce type de 4 m de large, de la profondeur de la zone de
+        façade et de 2,7 m sous plafond ; A<sub>w</sub> = fraction vitrée × largeur × hauteur d'étage × (1 − menuiserie) ;
+        θ = 90° moins l'élévation moyenne des obstacles (pondérée par cos) ; M = 0,9 ; R = 0,5.
+        Repères : ≥ 2 % pièce bien éclairée, ≥ 5 % très lumineuse ; en logement 1 % chambre, 1,5 % séjour, 2 % cuisine.</li>
+      <li><b>Validation</b> : VSC d'un mur dégagé 39,6 % ; derrière une obstruction infinie de 25°, VSC de 27,3 %, cohérent
+        avec la règle des 25° du BRE (27 %) ; FLJm d'une pièce type contre un calcul à la main.</li>
+    </ul>
     <h3>À venir</h3>
     <ul>
-      <li>Étape 5 : lumière naturelle (VSC, facteur de lumière du jour moyen).</li>
       <li>Étape 6 : fiche offre imprimable.</li>
     </ul>
     <h3>Sources des données</h3>
@@ -480,7 +494,7 @@
     build3d();
     pages.resultats = FS.uiResults.build();
     pages.thermique = FS.uiThermal.build();
-    buildSoon('lumiere', '06', 'Lumière', 'Ciel visible (VSC) et facteur de lumière du jour moyen, en ordre de grandeur.', 5);
+    pages.lumiere = FS.uiDaylight.build();
     buildSoon('fiche', '07', 'Fiche offre', 'Synthèse imprimable A4 paysage.', 6);
     buildMethod();
     wireProject();

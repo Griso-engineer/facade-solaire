@@ -21,6 +21,7 @@
       solar: { model: 'perez', split: 'erbs', albedo: 0.2, g: 0.6, color: 'annual', masks: true },
       climateInfo: null,       // source du climat utilisé (pour mémoire)
       thermal: FS.thermal.defaults(),
+      daylight: FS.daylight.defaults(),
       mapView: null
     };
   }
@@ -131,6 +132,7 @@
     p.solar = Object.assign(defaults().solar, s.solar || {});
     p.nbDefaults = Object.assign(defaults().nbDefaults, s.nbDefaults || {});
     p.thermal = Object.assign(FS.thermal.defaults(), s.thermal || {});
+    p.daylight = Object.assign(FS.daylight.defaults(), s.daylight || {});
     p.thermal.protection = Object.assign(FS.thermal.defaults().protection, (s.thermal && s.thermal.protection) || {});
     return p;
   }

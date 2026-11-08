@@ -7,8 +7,11 @@
   // ---------- Échelle séquentielle (une teinte, clair → foncé) ----------
   const RAMP = ['#fdebdc', '#fbd0b0', '#f6ab7c', '#ef844c', '#e0622a', '#bd4a1c', '#923712', '#66260c'];
   function hexToRgb(h) { const n = parseInt(h.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; }
-  const RGB = RAMP.map(hexToRgb);
-  function colorAt(t) {
+  // Lumière : seconde échelle séquentielle, en bleu (rampe de référence), pour ne pas la confondre avec le soleil
+  const RAMP_SKY = ['#e6f0fd', '#cde2fb', '#9ec5f4', '#6da7ec', '#3987e5', '#256abf', '#184f95', '#0d366b'];
+  const RGBS = { sun: RAMP.map(hexToRgb), sky: RAMP_SKY.map(hexToRgb) };
+  function colorAt(t, ramp) {
+    const RGB = RGBS[ramp || 'sun'];
     t = Math.max(0, Math.min(1, t)) * (RGB.length - 1);
     const i = Math.min(RGB.length - 2, Math.floor(t)), f = t - i;
     const c = RGB[i].map((v, k) => Math.round(v + (RGB[i + 1][k] - v) * f));
@@ -19,13 +22,14 @@
     annual: { label: 'Annuel', unit: 'kWh/m²·an', max: 1000, get: (f) => f.annual },
     winter: { label: 'Hiver (oct.–avr.)', unit: 'kWh/m²', max: 500, get: (f) => f.winter },
     summer: { label: 'Été (mai–sept.)', unit: 'kWh/m²', max: 600, get: (f) => f.summer },
-    peak: { label: 'Pic d\'été', unit: 'W/m²', max: 800, get: (f) => f.peak }
+    peak: { label: 'Pic d\'été', unit: 'W/m²', max: 800, get: (f) => f.peak },
+    vsc: { label: 'Ciel visible (VSC)', unit: '%', max: 40, get: (f) => f.vsc * 100, ramp: 'sky' }
   };
-  const colorFor = (mode, f) => colorAt(MODES[mode].get(f) / MODES[mode].max);
+  const colorFor = (mode, f) => colorAt(MODES[mode].get(f) / MODES[mode].max, MODES[mode].ramp);
 
   function legend(mode) {
     const m = MODES[mode];
-    const stops = RAMP.map((c, i) => c + ' ' + Math.round(i / (RAMP.length - 1) * 100) + '%').join(',');
+    const stops = (m.ramp === 'sky' ? RAMP_SKY : RAMP).map((c, i, a) => c + ' ' + Math.round(i / (a.length - 1) * 100) + '%').join(',');
     const ticks = [0, 0.25, 0.5, 0.75, 1].map((t) => el('span', { style: { left: t * 100 + '%' } }, FS.fmt(t * m.max, 0)));
     return el('div', { class: 'scale-legend' },
       el('div', { class: 'scale-title' }, m.label + ' · ' + m.unit),
@@ -59,7 +63,7 @@
       const a0 = (f.az - 9) * Math.PI / 180, a1 = (f.az + 9) * Math.PI / 180;
       const p = (a, r) => (c + r * Math.sin(a)).toFixed(1) + ',' + (c - r * Math.cos(a)).toFixed(1);
       const d = 'M' + p(a0, r0) + 'L' + p(a0, rr) + 'A' + rr + ',' + rr + ' 0 0 1 ' + p(a1, rr) + 'L' + p(a1, r0) + 'A' + r0 + ',' + r0 + ' 0 0 0 ' + p(a0, r0) + 'Z';
-      const path = S('path', { d, fill: colorAt(v / m.max), class: 'wedge' + (f.id === sel ? ' sel' : '') });
+      const path = S('path', { d, fill: colorAt(v / m.max, m.ramp), class: 'wedge' + (f.id === sel ? ' sel' : '') });
       const tip = 'Façade ' + f.id + ' · ' + FS.orientName[f.label] + ' (' + Math.round(f.az) + '°)\n' + m.label + ' : ' + FS.fmt(v, 0) + ' ' + m.unit;
       path.addEventListener('mousemove', (e) => FS.showTip(tip, e.clientX, e.clientY));
       path.addEventListener('mouseleave', FS.hideTip);
@@ -197,9 +201,9 @@
   // ---------- Barres groupées (ex. chauffage / froid par variante ou par mois) ----------
   /* cats : libellés ; series : [{ name, color, values }] ; opts : { unit, labels (valeurs sur les barres), title } */
   function groupBars(cats, series, opts = {}) {
-    const W = 560, H = opts.height || 240, ml = 44, mr = 8, mt = 18, mb = opts.wrapLabels ? 40 : 26;
+    const W = 560, H = opts.height || 240, ml = 44, mr = opts.refLines ? 62 : 8, mt = 18, mb = opts.wrapLabels ? 40 : 26;
     const iw = W - ml - mr, ih = H - mt - mb;
-    const vmax = Math.max(1e-6, ...series.flatMap((s) => s.values));
+    const vmax = Math.max(1e-6, ...series.flatMap((s) => s.values), ...(opts.refLines || []).map((r) => r.v));
     const step = niceStep(vmax / 4), top = Math.ceil(vmax / step) * step;
     const y = (v) => mt + ih - ih * v / top;
     const cw = iw / cats.length, gap = 2, bw = Math.min(42, (cw * 0.7 - gap * (series.length - 1)) / series.length);
@@ -207,6 +211,11 @@
     for (let v = 0; v <= top + 1e-9; v += step) {
       svg.append(S('line', { x1: ml, x2: W - mr, y1: y(v), y2: y(v), class: v === 0 ? 'axis' : 'grid' }));
       svg.append(S('text', { x: ml - 6, y: y(v) + 4, class: 'tick', 'text-anchor': 'end' }, FS.fmt(v, step < 1 ? 1 : 0)));
+    }
+    // seuils de lecture (traits tiretés)
+    for (const r of opts.refLines || []) {
+      svg.append(S('line', { x1: ml, x2: W - mr, y1: y(r.v), y2: y(r.v), class: 'refth' }));
+      svg.append(S('text', { x: W - mr + 4, y: y(r.v) + 4, class: 'tick', 'text-anchor': 'start' }, r.label));
     }
     cats.forEach((c, i) => {
       const x0 = ml + i * cw + (cw - (bw * series.length + gap * (series.length - 1))) / 2;
