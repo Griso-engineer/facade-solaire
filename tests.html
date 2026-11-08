@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tests · Façade solaire</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap">
+  <link rel="stylesheet" href="css/style.css?v=1">
+  <style>
+    body { padding: 24px var(--pad); display: block; }
+    .ok { color: var(--c-ok); font-weight: 700; } .ko { color: var(--c-red); font-weight: 700; }
+    h1 { font-weight: 900; font-size: 40px; letter-spacing: -0.04em; margin-bottom: 8px; }
+    h2 { font-size: 18px; font-weight: 800; margin: 28px 0 8px; }
+    td.d { color: var(--muted); font-size: 12.5px; }
+  </style>
+</head>
+<body>
+  <h1 id="title">Tests en cours…</h1>
+  <p class="muted">Validation des calculs : on appelle les fonctions de l'application telles quelles et on compare
+    leurs résultats à des références indépendantes. Ouvrir ce fichier par double-clic suffit.</p>
+  <div id="out"></div>
+
+  <script src="js/util.js"></script>
+  <script src="js/solar.js"></script>
+  <script src="js/osm.js"></script>
+  <script src="js/building.js"></script>
+  <script>
+  (function () {
+    'use strict';
+    const out = document.getElementById('out');
+    let table = null, nOk = 0, nKo = 0;
+    function section(title) {
+      out.append(FS.el('h2', {}, title));
+      table = FS.el('table', { class: 'tbl' }); out.append(table);
+    }
+    function check(name, ok, detail) {
+      ok ? nOk++ : nKo++;
+      table.append(FS.el('tr', {}, FS.el('td', { class: ok ? 'ok' : 'ko' }, ok ? 'OK' : 'ÉCHEC'), FS.el('td', {}, name), FS.el('td', { class: 'd' }, detail)));
+    }
+    const near = (name, v, ref, tol, unit = '') =>
+      check(name, Math.abs(v - ref) <= tol, v.toFixed(4) + unit + ' (référence ' + ref + unit + ' ± ' + tol + ')');
+    const S = FS.solar;
+
+    // ------------------------------------------------------------------
+    section('1. Position du soleil');
+    {
+      // Exemple de référence de l'algorithme SPA du NREL (Reda & Andreas, 2008, tableau A5.1) :
+      // 17 octobre 2003, 12 h 30 min 30 s heure locale (UTC−7), 39,742476° N, 105,1786° O.
+      // Zénith topocentrique 50,11162°, azimut 194,34024°.
+      const t = Date.UTC(2003, 9, 17, 19, 30, 30);
+      const p = S.position(t, 39.742476, -105.1786);
+      near('NREL SPA : zénith (avec réfraction)', p.zenith, 50.11162, 0.05, '°');
+      near('NREL SPA : azimut', p.azimuth, 194.34024, 0.05, '°');
+    }
+    {
+      // Hauteur maximale à Paris : 90° − φ + δ (δ = ±23,44° aux solstices)
+      const lat = 48.8566, lon = 2.3522;
+      const e = S.sunTimes(2026, S.doyOf(2026, 6, 21), lat, lon, 'Europe/Paris');
+      near('Paris, 21 juin : hauteur à midi solaire', e.maxAlt, 64.60, 0.3, '°');
+      const w = S.sunTimes(2026, S.doyOf(2026, 12, 21), lat, lon, 'Europe/Paris');
+      near('Paris, 21 décembre : hauteur à midi solaire', w.maxAlt, 17.72, 0.4, '°');
+      // Éphémérides (IMCCE) pour Paris : lever 5 h 47, coucher 21 h 58 le 21 juin 2026 ;
+      // 8 h 41 et 16 h 56 le 21 décembre 2026.
+      near('Paris, 21 juin : lever (min)', e.rise * 60, 5 * 60 + 47, 2, ' min');
+      near('Paris, 21 juin : coucher (min)', e.set * 60, 21 * 60 + 58, 2, ' min');
+      near('Paris, 21 décembre : lever (min)', w.rise * 60, 8 * 60 + 41, 2, ' min');
+      near('Paris, 21 décembre : coucher (min)', w.set * 60, 16 * 60 + 56, 2, ' min');
+      // Midi vrai ≈ 12 h − λ/15 − E(t) + décalage légal ; au 21 juin E ≈ −1,8 min → 13 h 52
+      near('Paris, 21 juin : midi solaire (heure légale, min)', e.noon * 60, 13 * 60 + 52, 3, ' min');
+    }
+    {
+      // Heure légale française
+      const off = (y, m, d, h) => S.tzOffsetHours(Date.UTC(y, m - 1, d, h), 'Europe/Paris');
+      check('Décalage UTC+1 en hiver', off(2026, 1, 15, 12) === 1, String(off(2026, 1, 15, 12)));
+      check('Décalage UTC+2 en été', off(2026, 7, 15, 12) === 2, String(off(2026, 7, 15, 12)));
+      check('Passage à l\'heure d\'été le 29 mars 2026 à 1 h UTC', off(2026, 3, 29, 0) === 1 && off(2026, 3, 29, 2) === 2, off(2026, 3, 29, 0) + ' → ' + off(2026, 3, 29, 2));
+      const u = S.localToUTC(2026, S.doyOf(2026, 7, 1), 14, 'Europe/Paris');
+      check('14 h légales le 1er juillet = 12 h UTC', new Date(u).getUTCHours() === 12, new Date(u).toISOString());
+    }
+
+    // ------------------------------------------------------------------
+    section('2. Découpage en façades');
+    const rect = (x0, y0, w, h) => [[x0, y0], [x0 + w, y0], [x0 + w, y0 + h], [x0, y0 + h]];
+    {
+      // Rectangle 20 m (est-ouest) × 10 m (nord-sud), H = 15 m, isolé
+      const m = FS.building.facades({ xy: rect(-10, -5, 20, 10), height: 15 }, []);
+      const f = m.facades;
+      check('Rectangle isolé : 4 façades', f.length === 4, f.length + ' façades');
+      check('Numérotation horaire depuis le nord : N, E, S, O', f.map((x) => x.label).join(',') === 'N,E,S,O', f.map((x) => x.label + ' ' + Math.round(x.az) + '°').join(' · '));
+      near('Surface façade nord (20 × 15)', f[0].area, 300, 1e-6, ' m²');
+      near('Surface façade est (10 × 15)', f[1].area, 150, 1e-6, ' m²');
+      near('Périmètre', m.perimeter, 60, 1e-6, ' m');
+      near('Emprise', m.footprintArea, 200, 1e-6, ' m²');
+    }
+    {
+      // Polygone donné dans le sens horaire : le sens est corrigé par FS.geo.clean
+      const cw = FS.geo.clean(rect(-10, -5, 20, 10).reverse());
+      const f = FS.building.facades({ xy: cw, height: 10 }, []).facades;
+      check('Anneau horaire remis dans le bon sens', f.map((x) => x.label).join(',') === 'N,E,S,O', f.map((x) => x.label).join(','));
+    }
+    {
+      // Rectangle tourné de 30° : normales à 30°, 120°, 210°, 300°
+      const a = 30 * Math.PI / 180, rot = (p) => [p[0] * Math.cos(a) + p[1] * Math.sin(a), -p[0] * Math.sin(a) + p[1] * Math.cos(a)];
+      const xy = FS.geo.clean(rect(-10, -5, 20, 10).map(rot));
+      const f = FS.building.facades({ xy, height: 10 }, []).facades;
+      check('Rectangle tourné de 30° : azimuts 30/120/210/300', f.map((x) => Math.round(x.az)).join(',') === '30,120,210,300', f.map((x) => x.az.toFixed(2)).join(', '));
+    }
+    {
+      // Mitoyen bas à l'est (9 m) : seule l'héberge (15 − 9 = 6 m) reste exposée
+      const nb = { xy: rect(10, -5, 12, 10), height: 9 };
+      const f = FS.building.facades({ xy: rect(-10, -5, 20, 10), height: 15 }, [nb]).facades;
+      const e = f.find((x) => x.label === 'E');
+      check('Mitoyen bas : façade est réduite à l\'héberge', e && e.pignon && Math.abs(e.area - 60) < 1e-6, e ? 'zMin ' + e.zMin + ' m, ' + e.area + ' m²' : 'absente');
+      // Mitoyen plus haut : la façade est disparaît
+      const f2 = FS.building.facades({ xy: rect(-10, -5, 20, 10), height: 15 }, [{ xy: rect(10, -5, 12, 10), height: 20 }]).facades;
+      check('Mitoyen plus haut : façade est supprimée', f2.length === 3 && !f2.some((x) => x.label === 'E'), f2.map((x) => x.label).join(','));
+      // Mitoyen partiel (5 m sur 10) : la façade est se divise en partie libre et héberge
+      const f3 = FS.building.facades({ xy: rect(-10, -5, 20, 10), height: 15 }, [{ xy: rect(10, -5, 12, 5), height: 9 }]).facades;
+      const es = f3.filter((x) => x.label === 'E');
+      const sum = es.reduce((s, x) => s + x.area, 0);
+      // la limite du mitoyen est localisée par dichotomie à ~1 cm près : 0,01 × 9 m ≈ 0,1 m²
+      near('Mitoyen partiel : surface exposée à l\'est (5 × 15 + 5 × 6)', sum, 105, 0.1, ' m²');
+      // Voisin à 3 m (rue étroite) : pas mitoyen
+      const f4 = FS.building.facades({ xy: rect(-10, -5, 20, 10), height: 15 }, [{ xy: rect(13, -5, 12, 10), height: 30 }]).facades;
+      check('Voisin à 3 m : la façade reste entière', f4.length === 4 && !f4.some((x) => x.pignon), f4.map((x) => x.label + (x.pignon ? '*' : '')).join(','));
+    }
+    {
+      // Décroché de 1,5 m au milieu de la façade sud : les retours sont rattachés
+      const xy = [[-10, -5], [-1, -5], [-1, -6.5], [1, -6.5], [1, -5], [10, -5], [10, 5], [-10, 5]];
+      const m = FS.building.facades({ xy: FS.geo.clean(xy), height: 10 }, []);
+      check('Décroché de 1,5 m : 4 façades', m.facades.length === 4, m.facades.map((x) => x.label + ' ' + x.length.toFixed(1)).join(' · '));
+      const s = m.facades.find((x) => x.label === 'S');
+      near('Façade sud : orientation non faussée par les retours', s.az, 180, 1e-6, '°');
+      near('Façade sud : longueur développée (20 + 2 × 1,5)', s.length, 23, 1e-6, ' m');
+    }
+    {
+      // Projection locale
+      const pr = FS.geo.projector(48.85, 2.35);
+      const xy = pr.toXY(48.851, 2.351);
+      near('Projection : 0,001° de latitude ≈ 111,2 m', xy[1], 111.19, 0.05, ' m');
+      near('Projection : 0,001° de longitude à 48,85° N ≈ 73,2 m', xy[0], 73.17, 0.05, ' m');
+      const back = pr.toLL(xy[0], xy[1]);
+      near('Projection aller-retour (latitude)', back[0], 48.851, 1e-9, '°');
+    }
+    {
+      // Lecture des hauteurs OSM
+      const d = { floorH: 3, defaultH: 15 };
+      const h1 = FS.osm.heightFromTags({ height: '21,5 m' }, d);
+      const h2 = FS.osm.heightFromTags({ 'building:levels': '6', 'roof:levels': '1' }, d);
+      const h3 = FS.osm.heightFromTags({}, d);
+      check('Tag height « 21,5 m »', h1.height === 21.5 && h1.src === 'height', h1.height + ' m, ' + h1.src);
+      check('6 niveaux + 1 comble × 3 m = 19,5 m', h2.height === 19.5 && h2.src === 'levels', h2.height + ' m, ' + h2.src);
+      check('Sans tag : hypothèse 15 m', h3.height === 15 && h3.src === 'default', h3.height + ' m, ' + h3.src);
+    }
+
+    document.getElementById('title').textContent = nKo ? nKo + ' test(s) en échec sur ' + (nOk + nKo) : 'Tous les tests passent (' + nOk + ')';
+    document.getElementById('title').className = nKo ? 'ko' : 'ok';
+  })();
+  </script>
+</body>
+</html>
