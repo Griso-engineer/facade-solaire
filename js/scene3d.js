@@ -165,6 +165,7 @@
     const sc = sun.shadow.camera;
     sc.left = -extent; sc.right = extent; sc.top = extent; sc.bottom = -extent; sc.near = 1; sc.far = extent * 4;
     sc.updateProjectionMatrix();
+    refreshColors();
     updateSun();
   }
 
@@ -181,6 +182,8 @@
       const c = facadeColor(m.userData.facade);
       if (selected === m.userData.facade.id) c.lerp(new THREE.Color(css('--ink')), 0.25);
       m.material.color.copy(c);
+      // couleurs de résultats : en partie émissives, pour rester fidèles à la légende malgré l'éclairage
+      m.material.emissive.copy(c).multiplyScalar(colors ? 0.5 : 0);
     }
     needs = true;
   }
@@ -258,7 +261,7 @@
     FS.showTip('Façade ' + f.id + ' · ' + FS.orientName[f.label] + ' (' + Math.round(f.az) + '°)\n' +
       FS.fmt(f.length, 1) + ' m × ' + FS.fmt(FS.project.derived().H - f.zMin, 1) + ' m = ' + FS.fmt(f.area, 0) + ' m²' +
       (f.pignon ? '\nHéberge au-dessus d\'un mitoyen' : '') +
-      (colors && f.tip ? '\n' + f.tip : ''), ev.clientX, ev.clientY);
+      (colors && FS.uiResults ? FS.uiResults.tipFor(f.id) : ''), ev.clientX, ev.clientY);
   }
   function onClick(ev) { const f = pickAt(ev); if (f && onPick) onPick(f.id); }
 

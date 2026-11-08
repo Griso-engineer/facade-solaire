@@ -24,6 +24,9 @@
   <script src="js/solar.js"></script>
   <script src="js/osm.js"></script>
   <script src="js/building.js"></script>
+  <script src="js/climate.js"></script>
+  <script src="js/climate-paris.js"></script>
+  <script src="js/irradiance.js"></script>
   <script>
   (function () {
     'use strict';
@@ -151,6 +154,74 @@
       check('Tag height « 21,5 m »', h1.height === 21.5 && h1.src === 'height', h1.height + ' m, ' + h1.src);
       check('6 niveaux + 1 comble × 3 m = 19,5 m', h2.height === 19.5 && h2.src === 'levels', h2.height + ' m, ' + h2.src);
       check('Sans tag : hypothèse 15 m', h3.height === 15 && h3.src === 'default', h3.height + ' m, ' + h3.src);
+    }
+
+    // ------------------------------------------------------------------
+    section('3. Rayonnement sur plan vertical');
+    {
+      const I = FS.irradiance;
+      // Cas analytique, ciel isotrope : soleil plein sud à 30°, DNI 800, DHI 100, GHI = 800·sin 30° + 100 = 500
+      const s = I.single(30, 180, 800, 100, 500, 180, { model: 'isotrope', albedo: 0.2 })[0];
+      near('Mur sud, isotrope : 800·cos 30° + 100/2 + 0,2·500/2', s, 800 * Math.cos(Math.PI / 6) + 50 + 50, 0.01, ' W/m²');
+      const nn = I.single(30, 180, 800, 100, 500, 0, { model: 'isotrope', albedo: 0.2 })[0];
+      near('Mur nord au même instant : diffus + réfléchi seulement', nn, 100, 0.01, ' W/m²');
+      const e = I.single(30, 180, 800, 100, 500, 90, { model: 'isotrope', albedo: 0.2 })[0];
+      near('Mur est, soleil plein sud : incidence rasante', e, 100, 0.01, ' W/m²');
+      const sw = I.single(30, 225, 800, 100, 500, 180, { model: 'isotrope', albedo: 0.2 })[0];
+      near('Mur sud, soleil au sud-ouest : 800·cos 30°·cos 45° + 100', sw, 800 * Math.cos(Math.PI / 6) * Math.SQRT1_2 + 100, 0.01, ' W/m²');
+      // Perez : ciel couvert (pas de direct, ε = 1) → résultat proche de l'isotrope (à ± 20 %)
+      const po = I.single(30, 180, 0, 200, 200, 180, { model: 'perez', albedo: 0.2 })[0];
+      const pi = I.single(30, 180, 0, 200, 200, 180, { model: 'isotrope', albedo: 0.2 })[0];
+      check('Perez, ciel couvert : proche de l\'isotrope', Math.abs(po / pi - 1) < 0.2, po.toFixed(1) + ' contre ' + pi.toFixed(1) + ' W/m²');
+      // Perez, ciel clair : le mur face au soleil reçoit plus de diffus qu'en isotrope, le mur opposé moins
+      const pS = I.single(30, 180, 800, 100, 500, 180, { model: 'perez', albedo: 0.2 })[0];
+      const pN = I.single(30, 180, 800, 100, 500, 0, { model: 'perez', albedo: 0.2 });
+      check('Perez, ciel clair : diffus renforcé face au soleil', pS > s, pS.toFixed(1) + ' > ' + s.toFixed(1) + ' W/m²');
+      check('Perez, ciel clair : mur nord sans circumsolaire, part isotrope réduite', pN.comp.circ[0] === 0 && pN.comp.iso[0] < 50,
+        'isotrope ' + pN.comp.iso[0].toFixed(1) + ' W/m² (50 en ciel isotrope), horizon ' + pN.comp.hor[0].toFixed(1) + ' W/m²');
+      // Décomposition d'Erbs : valeurs de l'article (Erbs, Klein, Duffie 1982)
+      near('Erbs : kd(0,1)', I.erbsKd(0.1), 0.991, 0.001);
+      near('Erbs : kd(0,5)', I.erbsKd(0.5), 0.6596, 0.001);
+      near('Erbs : kd(0,9)', I.erbsKd(0.9), 0.165, 1e-6);
+    }
+
+    // ------------------------------------------------------------------
+    section('4. Irradiation annuelle à Paris contre PVGIS (façades verticales non masquées)');
+    {
+      // Références PVGIS 5.3, base PVGIS-SARAH3 (satellite, 2005–2023), Paris 48,857° N 2,352° E,
+      // inclinaison 90°, sans horizon. Interrogées le 8 novembre 2026 (API PVcalc, H(i)_y et H(i)_m).
+      const PV = {
+        S: { az: 180, y: 1016.2, m: [54.08, 72.43, 98.34, 105.02, 91.28, 86.45, 92.83, 99.69, 106.07, 89.6, 63.34, 57.07] },
+        E: { az: 90, y: 742.78 }, O: { az: 270, y: 722.49 }, N: { az: 0, y: 309.66 }
+      };
+      const c = Object.assign(FS.climate.unpack(FS.CLIMATE_PARIS), { cacheKey: 'paris' });
+      const t0 = performance.now();
+      const Sk = FS.irradiance.sky(c, 48.857, 2.352, 'erbs');
+      const res = {};
+      for (const k in PV) {
+        const a = PV[k].az * Math.PI / 180;
+        const I = FS.irradiance.plane(Sk, Math.sin(a), Math.cos(a), { model: 'perez', albedo: 0.2 });
+        const m = new Array(12).fill(0);
+        for (let h = 0; h < Sk.n; h++) m[Sk.month[h]] += I[h] / 1000;
+        res[k] = { y: m.reduce((s, v) => s + v, 0), m };
+      }
+      const ms = performance.now() - t0;
+      const rel = (k) => (res[k].y - PV[k].y) / PV[k].y;
+      check('Façade sud : écart à PVGIS < 10 % (critère de validation)', Math.abs(rel('S')) < 0.10,
+        FS.fmt(res.S.y, 0) + ' kWh/m²·an contre ' + FS.fmt(PV.S.y, 0) + ' (' + (rel('S') * 100).toFixed(1) + ' %)');
+      check('Façade est : écart à PVGIS < 10 %', Math.abs(rel('E')) < 0.10, FS.fmt(res.E.y, 0) + ' contre ' + FS.fmt(PV.E.y, 0) + ' (' + (rel('E') * 100).toFixed(1) + ' %)');
+      check('Façade ouest : écart à PVGIS < 10 %', Math.abs(rel('O')) < 0.10, FS.fmt(res.O.y, 0) + ' contre ' + FS.fmt(PV.O.y, 0) + ' (' + (rel('O') * 100).toFixed(1) + ' %)');
+      check('Façade nord : écart à PVGIS < 30 % (indicatif : diffus seul, modèles de ciel différents)', Math.abs(rel('N')) < 0.30,
+        FS.fmt(res.N.y, 0) + ' contre ' + FS.fmt(PV.N.y, 0) + ' (' + (rel('N') * 100).toFixed(1) + ' %)');
+      const mdev = res.S.m.map((v, i) => ((v - PV.S.m[i]) / PV.S.m[i] * 100).toFixed(0) + ' %');
+      check('Façade sud, profil mensuel : écart d\'été (mai–août) < 15 %', [4, 5, 6, 7].every((i) => Math.abs(res.S.m[i] - PV.S.m[i]) / PV.S.m[i] < 0.15),
+        'écarts mensuels janv.→déc. : ' + mdev.join(', '));
+      check('Calcul annuel horaire (4 façades) en moins d\'une seconde', ms < 1000, FS.fmt(ms, 0) + ' ms');
+      // Année type : proche de la moyenne pluriannuelle
+      const sum = (a) => a.reduce((s, v) => s + v, 0);
+      const r = sum(c.monthly.ghiTMY) / sum(c.monthly.ghiLT) - 1;
+      check('Année type : rayonnement global annuel à ± 3 % de la moyenne 2015–2024', Math.abs(r) < 0.03,
+        FS.fmt(sum(c.monthly.ghiTMY), 0) + ' contre ' + FS.fmt(sum(c.monthly.ghiLT), 0) + ' kWh/m² (' + (r * 100).toFixed(1) + ' %)');
     }
 
     document.getElementById('title').textContent = nKo ? nKo + ' test(s) en échec sur ' + (nOk + nKo) : 'Tous les tests passent (' + nOk + ')';

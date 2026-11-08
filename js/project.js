@@ -18,6 +18,8 @@
       neighbors: [],           // [{ id, ll, tags, height, src }]
       removed: [],             // identifiants OSM des voisins retirés à la main (démolis…)
       view: { doy: FS.solar.doyOf(2026, 6, 21), hour: 15 },
+      solar: { model: 'perez', split: 'erbs', albedo: 0.2, g: 0.6, color: 'annual' },
+      climateInfo: null,       // source du climat utilisé (pour mémoire)
       mapView: null
     };
   }
@@ -121,10 +123,19 @@
     return o;
   }
 
+  // fusion avec les valeurs par défaut (projets enregistrés par une version antérieure)
+  function merge(s) {
+    const d = defaults();
+    const p = Object.assign(d, s);
+    p.solar = Object.assign(defaults().solar, s.solar || {});
+    p.nbDefaults = Object.assign(defaults().nbDefaults, s.nbDefaults || {});
+    return p;
+  }
+
   function save() { FS.store.set('project', P); }
   function load() {
     const s = FS.store.get('project', null);
-    if (s && s.app === 'facade-solaire') P = Object.assign(defaults(), s);
+    if (s && s.app === 'facade-solaire') P = merge(s);
     invalidate();
   }
   function reset() { P = defaults(); invalidate(); }
@@ -132,7 +143,7 @@
   function importJSON(text) {
     const s = JSON.parse(text);
     if (!s || s.app !== 'facade-solaire') throw new Error('Ce fichier n\'est pas un projet Façade solaire.');
-    P = Object.assign(defaults(), s);
+    P = merge(s);
     invalidate();
   }
 

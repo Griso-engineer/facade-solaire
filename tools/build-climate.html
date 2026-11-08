@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="fr">
+<head><meta charset="utf-8"><title>Génération du climat de secours (Paris)</title></head>
+<body>
+<p>Construit js/climate-paris.js : année type ERA5 (Open-Meteo) pour Paris, avec le même code que
+l'application. Usage (Edge sans interface, serveur local lancé) :</p>
+<pre>msedge --headless --disable-gpu --virtual-time-budget=60000 --dump-dom http://localhost:8080/tools/build-climate.html</pre>
+<pre id="out">en cours…</pre>
+<script src="../js/util.js"></script>
+<script src="../js/solar.js"></script>
+<script src="../js/climate.js"></script>
+<script>
+(async function () {
+  const out = document.getElementById('out');
+  try {
+    const lat = 48.8566, lon = 2.3522;
+    const js = await FS.climate.fetchOpenMeteo(lat, lon);
+    const t = FS.climate.buildTMY(js.hourly);
+    const c = FS.climate.pack({
+      source: 'paris-secours', label: 'Paris, ERA5 ' + FS.climate.YEARS.join('–') + ' (Open-Meteo), année type intégrée',
+      lat, lon, gridLat: js.latitude, gridLon: js.longitude, elevation: js.elevation, years: FS.climate.YEARS.slice(),
+      chosen: t.chosen, monthly: t.monthly, ghi: t.ghi, dhi: t.dhi, temp: t.temp
+    });
+    out.textContent = '/* Climat de secours : Paris, année type construite par tools/build-climate.html\n' +
+      '   à partir de la réanalyse ERA5 ' + FS.climate.YEARS.join('–') + ' (Open-Meteo, CC BY 4.0).\n' +
+      '   ghi, dhi en W/m² (moyenne sur l\'heure précédente, UTC), temp en dixièmes de °C.\n' +
+      '   Généré le ' + new Date().toISOString().slice(0, 10) + '. */\nwindow.FS = window.FS || {};\nFS.CLIMATE_PARIS = ' + JSON.stringify(c) + ';\n';
+    out.dataset.done = '1';
+  } catch (e) { out.textContent = 'ERREUR ' + e.message; }
+})();
+</script>
+</body>
+</html>

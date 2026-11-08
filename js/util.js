@@ -20,7 +20,9 @@ window.FS = window.FS || {};
       if (v == null || v === false) continue;
       if (k === 'class') e.className = v;
       else if (k === 'html') e.innerHTML = v;
-      else if (k === 'style' && typeof v === 'object') Object.assign(e.style, v);
+      else if (k === 'style' && typeof v === 'object') {
+        for (const p in v) { if (p.startsWith('--')) e.style.setProperty(p, v[p]); else e.style[p] = v[p]; }
+      }
       else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
       else if (k === 'value') e.value = v;
       else if (k === 'checked') e.checked = !!v;

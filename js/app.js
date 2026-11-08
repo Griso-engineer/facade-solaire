@@ -28,6 +28,7 @@
     refresh3dSide();
     if (kind !== 'view' && kind !== 'mode') FS.scene3d.build();
     if (kind === 'target') FS.scene3d.frame();
+    if (FS.uiResults) { FS.uiResults.refresh(); if (kind === 'target' || kind === 'geom') FS.uiResults.ensureClimate(); }
   }
 
   function setStatus(msg, err) {
@@ -250,11 +251,12 @@
         quick, el('div', { class: 'row-actions', style: { marginTop: 0 } }, play,
           el('button', { class: 'btn sm ghost', onclick: () => FS.scene3d.frame() }, 'Recadrer'))),
       el('div', { class: 'panel' }, el('h3', {}, 'Façades'), ui.fac3d,
-        el('small', {}, 'Coloration selon l\'irradiation : étape 2 (calcul solaire).')));
+        el('small', {}, 'Cliquez une façade (ou une ligne) pour la sélectionner.')));
     page.append(el('div', { class: 'work' }, viewport, side));
     pages['3d'] = page;
     FS.$('#app').append(page);
-    FS.scene3d.init(sceneBox, { onPick: (id) => { FS.scene3d.select(id); refresh3dSide(id); } });
+    FS.uiResults.attach3d(viewport, side);
+    FS.scene3d.init(sceneBox, { onPick: (id) => { FS.scene3d.select(id); FS.uiResults.select(id); refresh3dSide(id); FS.uiResults.refresh(); } });
     FS.scene3d.build();
     FS.scene3d.frame();
   }
@@ -334,10 +336,49 @@
       <li>Position du soleil par l'algorithme du NOAA (formulation de Meeus), réfraction de Bennett.
         Précision de l'ordre de 0,01° entre 1800 et 2100.</li>
       <li>Heures légales du fuseau Europe/Paris (changement d'heure compris).</li>
+      <li>Vérifiée contre l'exemple de référence du SPA du NREL (écart &lt; 0,01°) et les éphémérides de Paris (± 1 min).</li>
+    </ul>
+    <h3>Climat</h3>
+    <ul>
+      <li>Données horaires de la réanalyse ERA5 (maille de 0,25°, soit environ 28 × 18 km à Paris), 2015 à 2024,
+        servies par l'API Open-Meteo : rayonnement global horizontal et température. Mises en cache dans le navigateur.</li>
+      <li><b>Année type</b> : pour chaque mois, le mois réel le plus représentatif des dix ans (statistique de
+        Finkelstein-Schafer sur les distributions journalières de rayonnement et de température, puis, parmi les quatre
+        meilleurs, celui dont le cumul de rayonnement est le plus proche de la moyenne ; démarche de l'ISO 15927-4).
+        On garde ainsi la variabilité réelle des journées, qu'une moyenne heure par heure effacerait.
+        À Paris, l'année type est à 0,5 % de la moyenne décennale.</li>
+      <li>Les jonctions entre mois ne sont pas lissées. Une année type n'est pas une année chaude : les pics
+        estivaux d'une canicule peuvent être plus élevés.</li>
+      <li>En cas d'indisponibilité d'Open-Meteo, un jeu de secours (année type de Paris, même méthode) est utilisé et
+        signalé.</li>
+    </ul>
+    <h3>Rayonnement sur les façades</h3>
+    <ul>
+      <li><b>Partage direct / diffus</b> : le diffus est recalculé à partir du global par le modèle d'Erbs, Klein et
+        Duffie (1982). Le diffus brut d'ERA5 paraît sous-estimé (39 % du global à Paris, contre 52 % avec Erbs) :
+        avec lui, les façades est et ouest dépassent PVGIS de 8 à 12 %, contre 1 à 3 % avec Erbs. Il reste disponible en option.</li>
+      <li>Direct normal déduit du global et du diffus, avec la hauteur du soleil au milieu de chaque heure
+        (les valeurs horaires sont des moyennes sur l'heure écoulée).</li>
+      <li><b>Diffus du ciel</b> : modèle de Perez (1990), qui distingue le ciel uniforme, l'auréole autour du soleil et
+        la bande lumineuse de l'horizon. Option : ciel isotrope.</li>
+      <li><b>Réfléchi</b> : sol uniforme, albédo 0,2 par défaut (enrobé, pavés ; 0,3 à 0,4 pour un sol clair).</li>
+      <li><b>Validation</b> : façades verticales non masquées à Paris, contre PVGIS 5.3 (base satellite SARAH3,
+        2005–2023) : sud −4 %, est +1 %, ouest −3 %, nord +25 % (la façade nord ne reçoit que du diffus, où les modèles
+        de ciel divergent le plus ; PVGIS utilise le modèle de Muneer). Détail dans <code>tests.html</code>.</li>
+    </ul>
+    <h3>Indicateurs</h3>
+    <ul>
+      <li>Irradiation annuelle, d'hiver (octobre à avril) et d'été (mai à septembre), en kWh/m² de façade : moyenne des
+        segments de la façade pondérée par leur surface exposée.</li>
+      <li>Pic d'été : irradiance horaire maximale (W/m²) de mai à septembre sur l'année type.</li>
+      <li>Soleil direct : nombre d'heures où le soleil frappe la façade avec un rayonnement direct supérieur à
+        120 W/m² (seuil de l'OMM pour la durée d'insolation).</li>
+      <li>Apports par les vitrages : irradiation × surface vitrée × facteur solaire g, sans protection solaire ni
+        masque ; le pic d'apports est le maximum horaire en été (kW).</li>
+      <li>Les échelles de couleur ont des bornes fixes (1 000 kWh/m²·an, 800 W/m²…) pour comparer les projets entre eux.</li>
     </ul>
     <h3>À venir</h3>
     <ul>
-      <li>Étape 2 : climat horaire (Open-Meteo, ERA5), rayonnement sur les façades (Perez).</li>
       <li>Étape 3 : masques des voisins (horizon par point de façade).</li>
       <li>Étape 4 : bilan thermique mensuel et variantes de vitrage.</li>
       <li>Étape 5 : lumière naturelle (VSC, facteur de lumière du jour moyen).</li>
@@ -345,7 +386,8 @@
     </ul>
     <h3>Sources des données</h3>
     <p>Fond de carte, emprises et hauteurs : © contributeurs OpenStreetMap, licence ODbL.
-    Recherche d'adresse : Nominatim.</p>`;
+    Recherche d'adresse : Nominatim. Climat : réanalyse ERA5 (Copernicus Climate Change Service) via Open-Meteo,
+    licence CC BY 4.0.</p>`;
 
   // ---------- Routage ----------
   function route() {
@@ -387,7 +429,7 @@
     if (!window.L) FS.$('#app').append(el('p', { class: 'note err', style: { margin: '20px var(--pad)' } }, 'Leaflet n\'a pas pu être chargé : vérifiez la connexion internet.'));
     buildSite();
     build3d();
-    buildSoon('resultats', '04', 'Résultats', 'Irradiation annuelle, mensuelle et saisonnière par façade, pic estival.', 2);
+    pages.resultats = FS.uiResults.build();
     buildSoon('thermique', '05', 'Thermique', 'Bilan mensuel simplifié et comparaison de variantes de vitrage.', 4);
     buildSoon('lumiere', '06', 'Lumière', 'Ciel visible (VSC) et facteur de lumière du jour moyen, en ordre de grandeur.', 5);
     buildSoon('fiche', '07', 'Fiche offre', 'Synthèse imprimable A4 paysage.', 6);
@@ -397,6 +439,8 @@
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { FS.map.render(); FS.scene3d.build(); });
     route();
     refreshSite(); refresh3dSide();
+    FS.uiResults.refresh();
+    if (FS.project.get().target) FS.uiResults.ensureClimate();
     if (FS.project.get().target) FS.map.fit();
   }
 
