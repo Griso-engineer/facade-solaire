@@ -16,7 +16,7 @@ façade, des masques, des apports et des ordres de grandeur des besoins.
 |---|---|---|
 | 1 | Carte, emprise (OSM ou dessin), voisins, façades numérotées, maquette 3D et course du soleil | fait |
 | 2 | Climat horaire (Open-Meteo ERA5, secours Paris intégré), rayonnement sur façades (Perez) | fait |
-| 3 | Masques des voisins (horizon par point de façade) | à venir |
+| 3 | Masques des voisins (horizon par point de façade) | fait |
 | 4 | Bilan thermique mensuel (ISO 13790 / 52016-1) et variantes de vitrage | à venir |
 | 5 | Lumière naturelle : VSC et facteur de lumière du jour moyen (BRE) | à venir |
 | 6 | Fiche offre A4 paysage | à venir |
@@ -63,7 +63,8 @@ fil des étapes : irradiation contre PVGIS, bilan thermique contre un calcul à 
 | `js/climate.js` | Open-Meteo (ERA5 2015–2024), année type, cache |
 | `js/climate-paris.js` | Climat de secours : année type de Paris, générée par `tools/build-climate.html` |
 | `js/irradiance.js` | Rayonnement sur plan vertical : décomposition d'Erbs, Perez 1990 ou isotrope, réfléchi |
-| `js/results.js` | Indicateurs par façade : annuel, mensuel, hiver / été, pic, apports vitrés |
+| `js/masks.js` | Grille de points par façade, profils d'horizon, ciel vu |
+| `js/results.js` | Indicateurs par façade, avec ou sans masques : annuel, mensuel, hiver / été, pic, apports vitrés |
 | `js/charts.js` | Échelle de couleurs, rose des orientations, barres mensuelles (SVG) |
 | `js/ui-results.js` | Onglet Exposition, coloration de la maquette 3D |
 | `js/app.js` | Interface, onglets, enchaînement |
@@ -113,7 +114,24 @@ fil des étapes : irradiation contre PVGIS, bilan thermique contre un calcul à 
 
   En hiver, les écarts mensuels au sud atteignent −20 à −25 % (ERA5 voit moins de journées claires
   d'hiver que le satellite) ; ils restent sous 11 % de mars à octobre.
-- **Masques** : pas encore pris en compte à l'étape 2 (étape 3).
+- **Masques** : voir ci-dessous.
+
+## Hypothèses et limites : masques
+
+- **Grille** : un point de calcul par maille d'environ 2 m × 3 m (un par étage) sur chaque segment de
+  façade, au plus environ 4 000 points ; la maquette 3D est colorée maille par maille.
+- **Horizon** : pour chaque point et chaque degré d'azimut devant le mur, élévation du plus haut
+  obstacle, atan((h − z)/d), d'après les arêtes des volumes voisins et du bâtiment étudié (auto-masque des
+  angles rentrants et des cours). Exact au degré près pour des prismes à toit plat.
+- **Effet sur le rayonnement** : direct et circumsolaire seulement si le soleil dépasse l'horizon du
+  point ; diffus isotrope × ciel vu (facteur de vue intégré sur le profil, rapporté au mur dégagé) ;
+  bande d'horizon de Perez × part des directions dégagées sous 6° ; réfléchi par le sol conservé.
+- **Non pris en compte** : arbres, relief lointain, balcons et débords, réflexions des façades
+  voisines, ombre portée sur le sol vu par la façade.
+- **Validation** : élévation devant un vis-à-vis infini à ± 0,05° ; ciel vu face à une obstruction
+  infinie d'angle β égal à 1 − sin β (solution analytique) à ± 0,01 ; auto-masque d'un bâtiment en L ;
+  300 voisins en environ 0,2 s. Sur un bloc réel du 13e (24 m de haut, 968 points, 75 voisins dans
+  300 m) : horizons en 0,16 s, calcul horaire complet en 0,3 s.
 
 ### Régénérer le climat de secours
 

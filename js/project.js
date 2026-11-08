@@ -18,7 +18,7 @@
       neighbors: [],           // [{ id, ll, tags, height, src }]
       removed: [],             // identifiants OSM des voisins retirés à la main (démolis…)
       view: { doy: FS.solar.doyOf(2026, 6, 21), hour: 15 },
-      solar: { model: 'perez', split: 'erbs', albedo: 0.2, g: 0.6, color: 'annual' },
+      solar: { model: 'perez', split: 'erbs', albedo: 0.2, g: 0.6, color: 'annual', masks: true },
       climateInfo: null,       // source du climat utilisé (pour mémoire)
       mapView: null
     };

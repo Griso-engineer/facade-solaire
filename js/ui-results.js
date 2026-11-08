@@ -47,7 +47,7 @@
     const P = FS.project.get();
     const page = el('section', { class: 'page', id: 'page-resultats', hidden: true });
     page.append(FS.blockHead('04', 'Exposition solaire',
-      'Irradiation reçue par chaque façade sur une année type : rayonnement direct, diffus du ciel et réfléchi par le sol. Sans masques des voisins à ce stade.'));
+      'Irradiation reçue par chaque façade sur une année type : rayonnement direct, diffus du ciel et réfléchi par le sol, avec les masques des bâtiments voisins et du bâtiment lui-même.'));
 
     ui.main = el('div', {});
     // panneau latéral
@@ -58,6 +58,9 @@
     const chipsSplit = el('div', { class: 'chips' },
       [['erbs', 'Erbs (recalculé)'], ['era5', 'ERA5 brut']].map(([m, lab]) => el('button', { class: 'chip', 'data-m': m, onclick: () => { P.solar.split = m; FS.app.update('solar'); } }, lab)));
     ui.chipsSplit = chipsSplit;
+    const chipsMask = el('div', { class: 'chips' },
+      [[true, 'Avec masques'], [false, 'Sans masques']].map(([m, lab]) => el('button', { class: 'chip', 'data-m': String(m), onclick: () => { P.solar.masks = m; FS.app.update('solar'); } }, lab)));
+    ui.chipsMask = chipsMask;
     const alb = el('input', { type: 'number', min: 0, max: 0.9, step: 0.05, value: P.solar.albedo });
     alb.addEventListener('change', () => { P.solar.albedo = FS.clamp(FS.num(alb.value, 0.2), 0, 0.9); FS.app.update('solar'); });
     const g = el('input', { type: 'number', min: 0.05, max: 0.9, step: 0.05, value: P.solar.g });
@@ -66,6 +69,7 @@
     const side = el('aside', { class: 'side' },
       ui.climate,
       el('div', { class: 'panel' }, el('h3', {}, 'Hypothèses'),
+        el('label', { class: 'field' }, 'Masques (voisins et bâtiment)', chipsMask),
         el('label', { class: 'field' }, 'Partage direct / diffus', chipsSplit),
         el('label', { class: 'field' }, 'Modèle du diffus sur les façades', chipsModel),
         el('div', { class: 'grid2' },
@@ -84,6 +88,7 @@
     const P = FS.project.get(), D = FS.project.derived();
     ui.chipsModel.querySelectorAll('.chip').forEach((c) => c.classList.toggle('on', c.dataset.m === P.solar.model));
     ui.chipsSplit.querySelectorAll('.chip').forEach((c) => c.classList.toggle('on', c.dataset.m === (P.solar.split || 'erbs')));
+    ui.chipsMask.querySelectorAll('.chip').forEach((c) => c.classList.toggle('on', c.dataset.m === String(P.solar.masks !== false)));
     if (document.activeElement !== ui.alb) ui.alb.value = P.solar.albedo;
     if (document.activeElement !== ui.g) ui.g.value = P.solar.g;
     if (D.ok && !loading) compute(); else if (!D.ok) R = null;
@@ -98,8 +103,10 @@
     const top = fs.reduce((a, f) => (f.annual > a.annual ? f : a));
     const topS = fs.reduce((a, f) => (f.gainsSummer > a.gainsSummer ? f : a));
     const pk = fs.reduce((a, f) => (f.peak > a.peak ? f : a));
+    const loss = R.totals.incident0 ? 1 - R.totals.incident / R.totals.incident0 : 0;
     ui.main.append(el('div', { class: 'kpis' },
-      kpi(FS.fmt(R.totals.incident / 1000, 0) + ' MWh', 'reçus par an par les ' + FS.fmt(R.totals.area, 0) + ' m² de façades exposées'),
+      kpi(FS.fmt(R.totals.incident / 1000, 0) + ' MWh', 'reçus par an par les ' + FS.fmt(R.totals.area, 0) + ' m² de façades exposées' +
+        (R.masks ? ', soit ' + FS.pct(loss) + ' de moins qu\'en site dégagé' : ' (sans masques)')),
       kpi(FS.fmt(top.annual, 0) + ' kWh/m²', 'façade ' + top.id + ' (' + FS.orientName[top.label] + '), la plus exposée sur l\'année'),
       kpi(FS.pct(topS.shareSummer), 'des apports d\'été par les vitrages passent par la façade ' + topS.id + ' (' + FS.orientName[topS.label] + ')'),
       kpi(FS.fmt(pk.peak, 0) + ' W/m²', 'pic horaire d\'été, façade ' + pk.id + ' (' + FS.results.hourLabel(pk.peakH, P.tz) + ')')));
@@ -114,6 +121,9 @@
         el('td', { class: 'num' }, FS.fmt(f.area, 0)),
         el('td', { class: 'num' }, FS.fmt(f.glazed, 0)),
         el('td', { class: 'num hl' }, FS.fmt(f.annual, 0)),
+        el('td', { class: 'num' }, FS.fmt(f.annual0, 0)),
+        el('td', { class: 'num' }, R.masks ? '−' + FS.pct(f.maskLoss) : '—'),
+        el('td', { class: 'num' }, FS.pct(f.svf)),
         el('td', { class: 'num' }, FS.fmt(f.winter, 0)),
         el('td', { class: 'num' }, FS.fmt(f.summer, 0)),
         el('td', { class: 'num' }, FS.fmt(f.peak, 0)),
@@ -127,27 +137,34 @@
       el('thead', {},
         el('tr', {},
           el('th', {}, 'N°'), el('th', {}, 'Or.'), el('th', { class: 'num' }, 'Azimut'), el('th', { class: 'num' }, 'Façade m²'), el('th', { class: 'num' }, 'Vitrage m²'),
-          el('th', { class: 'num' }, 'Annuel'), el('th', { class: 'num' }, 'Hiver'), el('th', { class: 'num' }, 'Été'),
+          el('th', { class: 'num' }, 'Annuel'), el('th', { class: 'num' }, 'Dégagé'), el('th', { class: 'num' }, 'Masques'), el('th', { class: 'num' }, 'Ciel vu'),
+          el('th', { class: 'num' }, 'Hiver'), el('th', { class: 'num' }, 'Été'),
           el('th', { class: 'num' }, 'Pic été'), el('th', { class: 'num' }, 'Soleil direct'),
           el('th', { class: 'num' }, 'Apports été'), el('th', { class: 'num' }, 'Part été'), el('th', { class: 'num' }, 'Pic apports')),
         el('tr', { class: 'units' },
           el('th', {}), el('th', {}), el('th', {}), el('th', {}), el('th', {}),
-          el('th', { class: 'num' }, el('small', {}, 'kWh/m²·an')), el('th', { class: 'num' }, el('small', {}, 'oct.–avr.')), el('th', { class: 'num' }, el('small', {}, 'mai–sept.')),
+          el('th', { class: 'num' }, el('small', {}, 'kWh/m²·an')), el('th', { class: 'num' }, el('small', {}, 'sans masque')), el('th', {}), el('th', { class: 'num' }, el('small', {}, 'vs mur dégagé')),
+          el('th', { class: 'num' }, el('small', {}, 'oct.–avr.')), el('th', { class: 'num' }, el('small', {}, 'mai–sept.')),
           el('th', { class: 'num' }, el('small', {}, 'W/m²')), el('th', { class: 'num' }, el('small', {}, 'h/an')),
           el('th', { class: 'num' }, el('small', {}, 'MWh')), el('th', {}), el('th', { class: 'num' }, el('small', {}, 'kW')))),
       tb,
       el('tfoot', {}, el('tr', {},
         el('td', { colspan: 3 }, el('b', {}, 'Total')), el('td', { class: 'num' }, FS.fmt(T.area, 0)), el('td', { class: 'num' }, FS.fmt(T.glazed, 0)),
-        el('td', { class: 'num' }, FS.fmt(T.incident / T.area, 0)), el('td', {}), el('td', {}), el('td', {}), el('td', {}),
+        el('td', { class: 'num' }, FS.fmt(T.incident / T.area, 0)), el('td', { class: 'num' }, FS.fmt(T.incident0 / T.area, 0)),
+        el('td', { class: 'num' }, R.masks ? '−' + FS.pct(loss) : '—'), el('td', {}),
+        el('td', {}), el('td', {}), el('td', {}), el('td', {}),
         el('td', { class: 'num' }, el('b', {}, FS.fmt(T.gainsSummer / 1000, 1))), el('td', { class: 'num' }, '100 %'), el('td', {}))))));
     ui.main.append(el('p', { class: 'status', style: { marginTop: '6px' } },
-      'Annuel, hiver, été : irradiation moyenne de la façade. Soleil direct : heures où le soleil frappe la façade avec un rayonnement direct > 120 W/m² (définition OMM). ' +
-      'Apports : irradiation × surface vitrée × g = ' + FS.fmtFixed(P.solar.g, 2) + ', sans protection solaire ni masque. Calcul en ' + FS.fmt(R.ms, 0) + ' ms.'));
+      'Annuel, hiver, été : irradiation moyenne de la façade' + (R.masks ? ', masques compris' : '') + '. Dégagé : même façade sans aucun obstacle. ' +
+      'Ciel vu : facteur de vue du ciel rapporté à un mur dégagé. Soleil direct : heures où au moins la moitié de la façade est au soleil, avec un direct > 120 W/m² (seuil OMM). ' +
+      'Apports : irradiation × surface vitrée × g = ' + FS.fmtFixed(P.solar.g, 2) + ', sans protection solaire. ' +
+      FS.fmt(R.nPts, 0) + ' points de calcul, horizons en ' + FS.fmt(R.msMasks, 0) + ' ms, calcul horaire en ' + FS.fmt(R.ms, 0) + ' ms.'));
 
     // graphiques
     const f = fs.find((x) => x.id === sel) || top;
-    const ref = new Array(12).fill(0);
-    for (const x of fs) x.monthly.forEach((v, i) => { ref[i] += v * x.area / T.area; });
+    let ref = new Array(12).fill(0), refName = 'Moyenne des façades';
+    if (R.masks) { ref = f.monthly0; refName = 'Même façade, sans masques'; }
+    else for (const x of fs) x.monthly.forEach((v, i) => { ref[i] += v * x.area / T.area; });
     const modeR = P.solar.color === 'none' ? 'annual' : P.solar.color;
     ui.main.append(el('div', { class: 'charts2' },
       el('div', {},
@@ -155,8 +172,33 @@
         FS.charts.rose(R, modeR, sel, (id) => { sel = id; FS.scene3d.select(id); refresh(); })),
       el('div', {},
         el('div', { class: 'chart-head' }, el('h3', {}, 'Façade ' + f.id + ' · ' + FS.orientName[f.label] + ' (' + Math.round(f.az) + '°) : irradiation mensuelle'), el('small', {}, 'kWh/m²')),
-        FS.charts.monthly(f.monthly, ref, { name: 'Façade ' + f.id, unit: 'kWh/m²' }))));
+        FS.charts.monthly(f.monthly, ref, { name: 'Façade ' + f.id, unit: 'kWh/m²', refName }))));
+
+    // diagramme de masque d'un point de la façade : colonne centrale du plus long segment
+    const fi = fs.indexOf(f);
+    const MF = R.M.facades[fi];
+    let si = 0;
+    D.model.facades[fi].segs.forEach((s, i) => { if (s.len > D.model.facades[fi].segs[si].len) si = i; });
+    const MS = MF.segs[si];
+    const col = Math.floor(MS.g.nc / 2);
+    const rows = MS.g.nr;
+    const levels = [['bas', 0], ['milieu', Math.floor((rows - 1) / 2)], ['haut', rows - 1]].filter((x, i, a) => a.findIndex((y) => y[1] === x[1]) === i);
+    if (maskLevel >= levels.length) maskLevel = 0;
+    const row = levels[maskLevel][1];
+    const pt = MS.pts[row * MS.g.nc + col];
+    const head = el('div', { class: 'chart-head' },
+      el('h3', {}, 'Masque solaire, façade ' + f.id + ', point ' + levels[maskLevel][0] + ' (à ' + FS.fmt(pt.p[2], 1) + ' m)'),
+      el('div', { class: 'chips' }, levels.map((l, i) => el('button', { class: 'chip' + (i === maskLevel ? ' on' : ''), onclick: () => { maskLevel = i; refresh(); } }, l[0]))));
+    const box = el('div', { class: 'charts-full' }, head);
+    if (pt.buried || !pt.hz) box.append(el('p', { class: 'muted' }, 'Point recouvert par un volume voisin.'));
+    else {
+      box.append(FS.charts.maskDiagram(pt.hz, f.az, { lat: D.lat, lon: D.lon, tz: P.tz }));
+      box.append(el('p', { class: 'status' }, 'Silhouette grise : obstacles vus depuis le point (voisins et bâtiment). Courses du soleil le 21 juin, aux équinoxes et le 21 décembre ; ' +
+        'point plein : soleil visible à l\'heure pleine, point creux : masqué. Ciel vu depuis ce point : ' + FS.pct(pt.svf) + ' de celui d\'un mur dégagé.'));
+    }
+    ui.main.append(box);
   }
+  let maskLevel = 1;
 
   function renderClimate() {
     const box = ui.climate; box.innerHTML = '';
@@ -203,18 +245,26 @@
       ui.status3d.textContent = mode !== 'none' && !R ? (loading ? 'Chargement du climat…' : 'Résultats indisponibles.') : '';
       return;
     }
-    const map = {};
-    for (const f of R.facades) map[f.id] = FS.charts.colorFor(mode, f);
-    FS.scene3d.setColors(map);
+    // une couleur par maille (point de calcul)
+    const bySeg = {};
+    for (const f of R.facades) { bySeg[f.id] = {}; for (const c of f.cells) bySeg[f.id][c.si] = c; }
+    FS.scene3d.setColors((id, si, k) => {
+      const c = bySeg[id] && bySeg[id][si];
+      const v = c && c.v[k];
+      return v ? FS.charts.colorFor(mode, v) : null;
+    });
     ui.legend3d.append(FS.charts.legend(mode));
-    ui.status3d.textContent = 'Sans masques des voisins (étape 3). Survolez une façade pour ses valeurs.';
+    ui.status3d.textContent = (R.masks ? 'Avec les masques des voisins et du bâtiment lui-même' : 'Sans masques') +
+      ' : une maille par point de calcul (≈ ' + FS.fmt(R.M.cs.dx, 1) + ' m × ' + FS.fmt(R.M.cs.dz, 1) + ' m). Survolez une façade pour ses valeurs.';
   }
 
   function tipFor(id) {
     if (!R) return '';
     const f = R.facades.find((x) => x.id === id);
     if (!f) return '';
-    return '\n' + FS.fmt(f.annual, 0) + ' kWh/m²·an (hiver ' + FS.fmt(f.winter, 0) + ', été ' + FS.fmt(f.summer, 0) + ')\nPic d\'été ' + FS.fmt(f.peak, 0) + ' W/m²';
+    return '\n' + FS.fmt(f.annual, 0) + ' kWh/m²·an (hiver ' + FS.fmt(f.winter, 0) + ', été ' + FS.fmt(f.summer, 0) + ')' +
+      (R.masks ? '\nMasques : −' + FS.pct(f.maskLoss) + ' (' + FS.fmt(f.annual0, 0) + ' sans masque)' : '') +
+      '\nPic d\'été ' + FS.fmt(f.peak, 0) + ' W/m²';
   }
 
   FS.uiResults = { build, refresh, ensureClimate, attach3d, tipFor, get: () => R, select: (id) => { sel = id; } };

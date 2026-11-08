@@ -5,7 +5,8 @@
   'use strict';
   let renderer, scene, camera, controls, sun, hemi, root, sunMesh, pathLine, groundMesh;
   let host, labelBox, readout, facadeMeshes = [], labels = [], needs = true, raf = 0;
-  let colors = null; // { id: '#rrggbb' } coloration des façades (résultats)
+  let colors = null; // fonction de coloration des mailles de façade (résultats), ou null
+  let matNeutral = null, matResult = null;
   let selected = null, onPick = null, extent = 150;
   const ray = new (window.THREE ? THREE.Raycaster : Object)();
 
@@ -130,19 +131,35 @@
     root.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(outline), edgeMat));
 
     // façades
+    const cs = FS.masks.cellSize(D);
+    matNeutral = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
+    matResult = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide });
+    const gridMat = new THREE.LineBasicMaterial({ color: ink, transparent: true, opacity: 0.18 });
     for (const f of D.model.facades) {
-      const pos = [];
-      for (const s of f.segs) {
-        const a0 = v3(s.p0[0], s.p0[1], s.zMin), b0 = v3(s.p1[0], s.p1[1], s.zMin);
-        const a1 = v3(s.p0[0], s.p0[1], H), b1 = v3(s.p1[0], s.p1[1], H);
-        pos.push(a0, b0, b1, a0, b1, a1);
-      }
+      // une maille par point de calcul (même découpage que FS.masks), pour colorer les résultats point par point
+      const pos = [], cellIdx = [], grid = [];
+      f.segs.forEach((s, si) => {
+        const g = FS.masks.grid(s, H, cs);
+        const P = (u, z) => v3(s.p0[0] + (s.p1[0] - s.p0[0]) * u, s.p0[1] + (s.p1[1] - s.p0[1]) * u, z);
+        for (let j = 0; j < g.nr; j++) {
+          const z0 = s.zMin + j * g.h / g.nr, z1 = s.zMin + (j + 1) * g.h / g.nr;
+          for (let i = 0; i < g.nc; i++) {
+            const u0 = i / g.nc, u1 = (i + 1) / g.nc;
+            const a0 = P(u0, z0), b0 = P(u1, z0), b1 = P(u1, z1), a1 = P(u0, z1);
+            pos.push(a0, b0, b1, a0, b1, a1);
+            cellIdx.push([si, j * g.nc + i]);
+          }
+          if (j > 0) grid.push(P(0, z0), P(1, z0)); // lignes d'étage
+        }
+      });
       const geo = new THREE.BufferGeometry().setFromPoints(pos);
+      geo.setAttribute('color', new THREE.Float32BufferAttribute(new Float32Array(pos.length * 3).fill(1), 3));
       geo.computeVertexNormals();
-      const mat = new THREE.MeshLambertMaterial({ color: facadeColor(f), side: THREE.DoubleSide });
-      const mesh = new THREE.Mesh(geo, mat);
+      const mesh = new THREE.Mesh(geo, matNeutral);
       mesh.castShadow = true; mesh.receiveShadow = true;
       mesh.userData.facade = f;
+      mesh.userData.cells = cellIdx;
+      if (grid.length) root.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(grid), gridMat));
       root.add(mesh);
       facadeMeshes.push(mesh);
       // arêtes verticales et pied
@@ -169,21 +186,29 @@
     updateSun();
   }
 
-  function facadeColor(f) {
-    if (colors && colors[f.id]) return new THREE.Color(colors[f.id]);
+  function neutralColor(f) {
     const base = new THREE.Color(f.pignon ? css('--scene-nb') : css('--accent'));
     if (!f.pignon) base.lerp(new THREE.Color(css('--scene-target')), 0.45);
     return base;
   }
 
+  /* colors : null (façades neutres, éclairées) ou fonction (idFaçade, iSegment, iPoint) → '#rrggbb'.
+     Les couleurs de résultats sont affichées sans éclairage, pour rester fidèles à la légende. */
   function setColors(c) { colors = c; refreshColors(); }
   function refreshColors() {
+    const ink = new THREE.Color(css('--ink')), tmp = new THREE.Color();
     for (const m of facadeMeshes) {
-      const c = facadeColor(m.userData.facade);
-      if (selected === m.userData.facade.id) c.lerp(new THREE.Color(css('--ink')), 0.25);
-      m.material.color.copy(c);
-      // couleurs de résultats : en partie émissives, pour rester fidèles à la légende malgré l'éclairage
-      m.material.emissive.copy(c).multiplyScalar(colors ? 0.5 : 0);
+      const f = m.userData.facade;
+      m.material = colors ? matResult : matNeutral;
+      const attr = m.geometry.getAttribute('color');
+      const base = neutralColor(f);
+      m.userData.cells.forEach(([si, k], ci) => {
+        const hex = colors ? colors(f.id, si, k) : null;
+        if (hex) tmp.set(hex); else tmp.copy(colors ? new THREE.Color(css('--scene-nb')) : base);
+        if (selected === f.id) tmp.lerp(ink, 0.22);
+        for (let v = 0; v < 6; v++) attr.setXYZ(ci * 6 + v, tmp.r, tmp.g, tmp.b);
+      });
+      attr.needsUpdate = true;
     }
     needs = true;
   }

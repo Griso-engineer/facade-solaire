@@ -366,20 +366,44 @@
         2005–2023) : sud −4 %, est +1 %, ouest −3 %, nord +25 % (la façade nord ne reçoit que du diffus, où les modèles
         de ciel divergent le plus ; PVGIS utilise le modèle de Muneer). Détail dans <code>tests.html</code>.</li>
     </ul>
+    <h3>Masques</h3>
+    <ul>
+      <li>Chaque segment de façade porte une grille de points de calcul, d'environ 2 m de large sur 3 m de haut
+        (un par étage), un peu plus lâche au-delà de 4 000 points. Les couleurs de la maquette 3D suivent cette grille.</li>
+      <li>Pour chaque point, on calcule le <b>profil d'horizon</b> : pour chaque degré d'azimut devant le mur, l'élévation
+        du plus haut obstacle, atan((h − z)/d), d'après les arêtes des volumes voisins et du bâtiment étudié lui-même
+        (angles rentrants, cours). Les volumes étant des prismes à toit plat, ce lancer de rayons est exact au degré près.</li>
+      <li>Heure par heure, le <b>direct</b> et le <b>circumsolaire</b> ne comptent que si le soleil est au-dessus de l'horizon
+        du point. Le <b>diffus isotrope</b> est multiplié par le ciel vu du point, rapporté à un mur dégagé
+        (facteur de vue intégré sur le profil d'horizon). La <b>bande d'horizon</b> de Perez est réduite à la part des
+        directions dégagées sous 6°.</li>
+      <li>Le <b>réfléchi par le sol</b> est conservé tel quel. On ne compte ni la réflexion des façades voisines (qui
+        compense en partie), ni l'ombre portée sur le sol vu par la façade.</li>
+      <li>Un point qui tombe dans un volume voisin plus haut (chevauchement d'emprises OSM) est écarté.</li>
+      <li>Les arbres, le relief lointain, les balcons et les débords de toiture ne sont pas pris en compte.</li>
+      <li><b>Validation</b> : élévation devant un vis-à-vis infini, à ± 0,05°, dans l'axe et de biais ; ciel vu face à une
+        obstruction infinie d'angle β égal à 1 − sin β (solution analytique), à ± 0,01 ; auto-masque d'un bâtiment en L ;
+        300 voisins traités en environ 0,2 s.</li>
+    </ul>
+    <h3>Diagramme de masque</h3>
+    <p>Pour la façade sélectionnée, le diagramme montre en projection cylindrique la silhouette des obstacles vus d'un point
+    (bas, milieu ou haut de la façade) et les courses du soleil des 21 juin, 21 décembre et des équinoxes. Les points pleins
+    signalent les heures où le soleil est visible, les points creux celles où il est masqué.</p>
     <h3>Indicateurs</h3>
     <ul>
       <li>Irradiation annuelle, d'hiver (octobre à avril) et d'été (mai à septembre), en kWh/m² de façade : moyenne des
         segments de la façade pondérée par leur surface exposée.</li>
       <li>Pic d'été : irradiance horaire maximale (W/m²) de mai à septembre sur l'année type.</li>
-      <li>Soleil direct : nombre d'heures où le soleil frappe la façade avec un rayonnement direct supérieur à
-        120 W/m² (seuil de l'OMM pour la durée d'insolation).</li>
+      <li>Soleil direct : nombre d'heures où au moins la moitié de la façade est au soleil, avec un rayonnement direct
+        supérieur à 120 W/m² (seuil de l'OMM pour la durée d'insolation).</li>
+      <li>Masques : perte d'irradiation annuelle par rapport à la même façade sans aucun obstacle. Ciel vu : facteur de vue
+        du ciel moyen de la façade, rapporté à un mur dégagé.</li>
       <li>Apports par les vitrages : irradiation × surface vitrée × facteur solaire g, sans protection solaire ni
         masque ; le pic d'apports est le maximum horaire en été (kW).</li>
       <li>Les échelles de couleur ont des bornes fixes (1 000 kWh/m²·an, 800 W/m²…) pour comparer les projets entre eux.</li>
     </ul>
     <h3>À venir</h3>
     <ul>
-      <li>Étape 3 : masques des voisins (horizon par point de façade).</li>
       <li>Étape 4 : bilan thermique mensuel et variantes de vitrage.</li>
       <li>Étape 5 : lumière naturelle (VSC, facteur de lumière du jour moyen).</li>
       <li>Étape 6 : fiche offre imprimable.</li>

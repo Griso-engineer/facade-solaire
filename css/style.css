@@ -279,3 +279,8 @@ table.tbl input[type="number"] { width: 70px; padding: 3px 5px; font-size: 13px;
 table.tbl td.hl { font-weight: 800; }
 @media (max-width: 1100px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .kpi:nth-child(3) { border-left: 0; padding-left: 0; } }
 @media (max-width: 760px) { .charts2 { grid-template-columns: minmax(0, 1fr); } }
+.chart .maskfill { fill: var(--muted); fill-opacity: 0.35; stroke: var(--ink-2); stroke-width: 1; }
+.chart .sunpath { fill: none; stroke: #eb6834; stroke-width: 2; }
+.chart .sundot { fill: #eb6834; stroke: var(--paper); stroke-width: 2; }
+.chart .sundot.off { fill: var(--paper); stroke: #eb6834; stroke-width: 1.5; }
+.charts-full { margin-top: 28px; }

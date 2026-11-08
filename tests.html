@@ -27,6 +27,7 @@
   <script src="js/climate.js"></script>
   <script src="js/climate-paris.js"></script>
   <script src="js/irradiance.js"></script>
+  <script src="js/masks.js"></script>
   <script>
   (function () {
     'use strict';
@@ -222,6 +223,86 @@
       const r = sum(c.monthly.ghiTMY) / sum(c.monthly.ghiLT) - 1;
       check('Année type : rayonnement global annuel à ± 3 % de la moyenne 2015–2024', Math.abs(r) < 0.03,
         FS.fmt(sum(c.monthly.ghiTMY), 0) + ' contre ' + FS.fmt(sum(c.monthly.ghiLT), 0) + ' kWh/m² (' + (r * 100).toFixed(1) + ' %)');
+    }
+
+    // ------------------------------------------------------------------
+    section('5. Masques');
+    {
+      const M = FS.masks, RAD = Math.PI / 180;
+      const box = (x0, y0, w, h, H) => { const xy = rect(x0, y0, w, h); return { xy, height: H, bbox: FS.building.bbox(xy) }; };
+      const edges = (target, H, nbs) => {
+        const E = [];
+        target.forEach((a, i) => { const b = target[(i + 1) % target.length]; E.push({ ax: a[0], ay: a[1], bx: b[0], by: b[1], h: H, self: true, edge: i }); });
+        for (const nb of nbs) nb.xy.forEach((a, i) => { const b = nb.xy[(i + 1) % nb.xy.length]; E.push({ ax: a[0], ay: a[1], bx: b[0], by: b[1], h: nb.height, self: false, edge: i }); });
+        return E;
+      };
+      // Mur sud d'un bâtiment 20 × 10 m (façade y = −5), point à 1,5 m de haut au milieu.
+      const T = rect(-10, -5, 20, 10);
+      const p = [0, -5.1, 1.5], n = [0, -1];
+      // Bâtiment isolé : aucun auto-masque sur un volume convexe
+      {
+        const hz = M.horizon(p, n, edges(T, 15, []), 0);
+        let mx = 0; for (let k = 0; k < 360; k++) if (hz[k] > mx) mx = hz[k];
+        check('Volume convexe isolé : horizon dégagé', mx === 0, 'élévation maximale ' + (mx / RAD).toFixed(2) + '°');
+        const sf = M.skyFactors(hz, n);
+        near('Mur dégagé : ciel vu = 1', sf.svf, 1, 0.002);
+        near('Mur dégagé : facteur de vue du ciel = 0,5', sf.F, 0.5, 0.001);
+      }
+      // Immeuble en vis-à-vis, très long (2 km), 21,5 m de haut, à 10 m (rue) : élévation à 45°... de face
+      {
+        const nb = box(-1000, -35.1 + 10, 2000, 20, 21.5); // façade nord du vis-à-vis en y = −15,1
+        nb.xy = rect(-1000, -35.1, 2000, 20); nb.bbox = FS.building.bbox(nb.xy);
+        const hz = M.horizon(p, n, edges(T, 15, [nb]), 0);
+        // distance 10 m, hauteur au-dessus du point 20 m → atan(2) = 63,43°
+        near('Vis-à-vis infini : élévation dans l\'axe = atan(20/10)', M.at(hz, 180) / RAD, Math.atan(2) / RAD, 0.05, '°');
+        // à 60° de l'axe, la distance double : atan(20 cos 60° / 10) = 45°
+        near('Vis-à-vis infini : élévation à 60° de l\'axe = atan(20·cos 60°/10)', M.at(hz, 240.5) / RAD, Math.atan(2 * Math.cos(60.5 * RAD)) / RAD, 0.3, '°');
+        // Facteur de vue du ciel d'un élément vertical face à une obstruction infinie d'angle β : (1 − sin β)/2
+        const beta = Math.atan(2);
+        const sf = M.skyFactors(hz, n);
+        near('Vis-à-vis infini : ciel vu = 1 − sin β (solution analytique 2D)', sf.svf, 1 - Math.sin(beta), 0.01);
+        // seules les directions presque rasantes (≈ ±87° de l'axe) voient le vis-à-vis sous 6°
+        check('Vis-à-vis haut : bande d\'horizon presque entièrement masquée', sf.hb < 0.05, 'part dégagée ' + sf.hb.toFixed(3));
+        // Soleil de midi : masqué au 21 décembre (h ≈ 18°), visible au 21 juin (h ≈ 64,6° > 63,4°)
+        const w = FS.solar.position(FS.solar.localToUTC(2026, FS.solar.doyOf(2026, 12, 21), 12.85, 'Europe/Paris'), 48.857, 2.352);
+        const s = FS.solar.position(FS.solar.localToUTC(2026, FS.solar.doyOf(2026, 6, 21), 13.85, 'Europe/Paris'), 48.857, 2.352);
+        check('Midi solaire du 21 décembre : soleil masqué par le vis-à-vis', w.altitude * RAD <= M.at(hz, w.azimuth), 'hauteur ' + w.altitude.toFixed(1) + '° ≤ masque ' + (M.at(hz, w.azimuth) / RAD).toFixed(1) + '°');
+        check('Midi solaire du 21 juin : soleil visible au-dessus du vis-à-vis', s.altitude * RAD > M.at(hz, s.azimuth), 'hauteur ' + s.altitude.toFixed(1) + '° > masque ' + (M.at(hz, s.azimuth) / RAD).toFixed(1) + '°');
+        // Un voisin plus bas que le point ne masque rien
+        const low = box(-50, -40, 100, 10, 1.2);
+        const hz2 = M.horizon(p, n, edges(T, 15, [low]), 0);
+        check('Voisin plus bas que le point : aucun masque', M.at(hz2, 180) === 0, (M.at(hz2, 180) / RAD).toFixed(2) + '°');
+        // Un obstacle derrière le mur ne masque rien
+        const back = box(-50, 20, 100, 10, 60);
+        const hz3 = M.horizon(p, n, edges(T, 15, [back]), 0);
+        let mx = 0; for (let k = 0; k < 360; k++) if (hz3[k] > mx) mx = hz3[k];
+        check('Obstacle derrière le mur : aucun masque', mx === 0, (mx / RAD).toFixed(2) + '°');
+      }
+      // Auto-masque : bâtiment en L, point au fond de l'angle rentrant
+      {
+        const L = FS.geo.clean([[0, 0], [30, 0], [30, 10], [10, 10], [10, 30], [0, 30]]);
+        // façade de l'aile horizontale côté nord (y = 10, de x = 10 à 30), normale vers le nord
+        const i = L.findIndex((a, k) => { const b = L[(k + 1) % L.length]; return Math.abs(a[1] - 10) < 1e-9 && Math.abs(b[1] - 10) < 1e-9; });
+        const hz = M.horizon([12, 10.1, 1.5], [0, 1], edges(L, 15, []), i);
+        // l'aile verticale (x = 10) est à 2 m à l'ouest : forte obstruction vers l'ouest-nord-ouest
+        check('Bâtiment en L : l\'aile voisine masque l\'angle rentrant', M.at(hz, 280) / RAD > 45, 'élévation à 280° : ' + (M.at(hz, 280) / RAD).toFixed(1) + '°');
+        check('Bâtiment en L : pas de masque vers l\'est', M.at(hz, 80) === 0, (M.at(hz, 80) / RAD).toFixed(2) + '°');
+      }
+      // Performance : quartier fictif de 300 voisins, bâtiment de 60 × 20 × 30 m
+      {
+        let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+        const tgt = rect(-30, -10, 60, 20);
+        const nbs = [];
+        while (nbs.length < 300) {
+          const x = (rnd() - 0.5) * 300, y = (rnd() - 0.5) * 300;
+          if (Math.abs(x) < 50 && Math.abs(y) < 30) continue;
+          nbs.push(Object.assign(box(x, y, 8 + rnd() * 20, 8 + rnd() * 20, 6 + rnd() * 30), { id: 'n' + nbs.length, src: 'height' }));
+        }
+        const model = FS.building.facades({ xy: tgt, height: 30 }, nbs);
+        const D = { xy: tgt, H: 30, nbs, model };
+        const r = M.compute(D);
+        check('Quartier de 300 voisins : horizons de tous les points en moins de 2 s', r.ms < 2000, FS.fmt(r.nPts, 0) + ' points, ' + FS.fmt(r.ms, 0) + ' ms');
+      }
     }
 
     document.getElementById('title').textContent = nKo ? nKo + ' test(s) en échec sur ' + (nOk + nKo) : 'Tous les tests passent (' + nOk + ')';

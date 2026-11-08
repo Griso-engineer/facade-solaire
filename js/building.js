@@ -166,7 +166,7 @@
       return {
         az, label: FS.orientLabel(az), length, area, zMin, pignon: zMin > 0.1,
         mid, n: [Math.sin(az * RAD), Math.cos(az * RAD)],
-        segs: g.segs.map((s) => ({ p0: s.p0, p1: s.p1, n: s.n, len: s.len, zMin: s.zMin }))
+        segs: g.segs.map((s) => ({ p0: s.p0, p1: s.p1, n: s.n, len: s.len, zMin: s.zMin, edge: s.edge }))
       };
     });
     if (fac.length) {

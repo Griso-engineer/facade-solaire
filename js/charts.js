@@ -115,7 +115,7 @@
       svg.append(S('text', { x: ml + i * bw + bw / 2, y: H - 8, class: 'tick', 'text-anchor': 'middle' }, FS.climate.MONTHS[i].replace('.', '')));
       const hit = S('rect', { x: ml + i * bw, y: mt, width: bw, height: ih, class: 'hit' });
       const tip = FS.climate.MONTHS[i] + '\n' + (opts.name || 'Façade') + ' : ' + FS.fmt(v, 1) + ' ' + (opts.unit || 'kWh/m²') +
-        (ref ? '\nMoyenne des façades : ' + FS.fmt(ref[i], 1) : '');
+        (ref ? '\n' + (opts.refName || 'Moyenne des façades') + ' : ' + FS.fmt(ref[i], 1) : '');
       hit.addEventListener('mousemove', (e) => FS.showTip(tip, e.clientX, e.clientY));
       hit.addEventListener('mouseleave', FS.hideTip);
       svg.append(hit);
@@ -128,9 +128,70 @@
     const wrap = el('div', { class: 'chart-wrap' });
     if (ref) wrap.append(el('div', { class: 'legend-inline' },
       el('span', { style: { '--sw': opts.color || 'var(--accent)' } }, opts.name || 'Façade'),
-      el('span', { class: 'line', style: { '--sw': 'var(--muted)' } }, 'Moyenne des façades')));
+      el('span', { class: 'line', style: { '--sw': 'var(--muted)' } }, opts.refName || 'Moyenne des façades')));
     wrap.append(svg);
     return wrap;
+  }
+
+  // ---------- Diagramme de masque solaire (projection cylindrique) ----------
+  /* hz : profil d'horizon du point (rad, 360 cases) ; az : azimut de la façade (°) ;
+     opts : { lat, lon, tz }. Abscisse : azimut de az − 90° à az + 90° ; ordonnée : hauteur 0–75°. */
+  function maskDiagram(hz, az, opts) {
+    const W = 560, H = 250, ml = 34, mr = 10, mt = 12, mb = 30;
+    const iw = W - ml - mr, ih = H - mt - mb, AMAX = 75;
+    const rel = (a) => { let d = ((a - az + 540) % 360) - 180; return d; }; // −180..180
+    const x = (a) => ml + (rel(a) + 90) / 180 * iw;
+    const y = (alt) => mt + ih - ih * Math.min(alt, AMAX) / AMAX;
+    const svg = S('svg', { viewBox: '0 0 ' + W + ' ' + H, class: 'chart maskd', role: 'img', 'aria-label': 'Diagramme de masque solaire' });
+    for (let alt = 0; alt <= AMAX; alt += 15) {
+      svg.append(S('line', { x1: ml, x2: W - mr, y1: y(alt), y2: y(alt), class: alt ? 'grid' : 'axis' }));
+      svg.append(S('text', { x: ml - 5, y: y(alt) + 4, class: 'tick', 'text-anchor': 'end' }, alt + '°'));
+    }
+    for (let d = -90; d <= 90; d += 30) {
+      const a = (az + d + 360) % 360;
+      svg.append(S('line', { x1: x(a), x2: x(a), y1: mt, y2: mt + ih, class: 'grid' }));
+      const lab = Math.round(a) + '° ' + FS.orientLabel(a);
+      svg.append(S('text', { x: x(a), y: H - 10, class: d === 0 ? 'card' : 'tick', 'text-anchor': 'middle' }, d === 0 ? 'normale · ' + lab : lab));
+    }
+    // masque : silhouette des obstacles
+    let d = 'M' + ml + ',' + y(0);
+    for (let k = -90; k <= 90; k++) {
+      const a = (az + k + 360) % 360;
+      const e = Math.max(0, FS.masks.at(hz, a)) / Math.PI * 180;
+      d += 'L' + (ml + (k + 90) / 180 * iw).toFixed(1) + ',' + y(e).toFixed(1);
+    }
+    d += 'L' + (W - mr) + ',' + y(0) + 'Z';
+    svg.append(S('path', { d, class: 'maskfill' }));
+    // courses du soleil
+    const days = [['21 juin', 6, 21], ['équinoxes', 3, 20], ['21 déc.', 12, 21]];
+    for (const [lab, m, dd] of days) {
+      const doy = FS.solar.doyOf(2026, m, dd);
+      let path = '', last = null, pen = false;
+      for (let t = 4; t <= 22; t += 1 / 6) {
+        const p = FS.solar.position(FS.solar.localToUTC(2026, doy, t, opts.tz), opts.lat, opts.lon);
+        const r = rel(p.azimuth);
+        if (p.altitude <= 0 || Math.abs(r) > 90) { pen = false; continue; }
+        path += (pen ? 'L' : 'M') + x(p.azimuth).toFixed(1) + ',' + y(p.altitude).toFixed(1);
+        pen = true; last = p;
+        // heures pleines
+        if (Math.abs(t - Math.round(t)) < 0.01) {
+          const vis = p.altitude * Math.PI / 180 > FS.masks.at(hz, p.azimuth);
+          svg.append(S('circle', { cx: x(p.azimuth), cy: y(p.altitude), r: 3.2, class: vis ? 'sundot' : 'sundot off' }));
+          if (m === 6) svg.append(S('text', { x: x(p.azimuth), y: y(p.altitude) - 7, class: 'tick', 'text-anchor': 'middle' }, Math.round(t) + ' h'));
+        }
+      }
+      svg.insertBefore(S('path', { d: path, class: 'sunpath' }), svg.querySelector('.sundot'));
+      if (last) {
+        // étiquette directe en bout de course
+        let best = null;
+        for (let t = 4; t <= 22; t += 0.25) {
+          const p = FS.solar.position(FS.solar.localToUTC(2026, doy, t, opts.tz), opts.lat, opts.lon);
+          if (p.altitude > 0 && Math.abs(rel(p.azimuth)) <= 90 && (!best || p.altitude > best.altitude)) best = p;
+        }
+        if (best) svg.append(S('text', { x: x(best.azimuth), y: y(best.altitude) - (m === 6 ? 18 : 8), class: 'lab', 'text-anchor': 'middle' }, lab));
+      }
+    }
+    return svg;
   }
 
   function niceStep(x) {
@@ -138,5 +199,5 @@
     return (r <= 1 ? 1 : r <= 2 ? 2 : r <= 2.5 ? 2.5 : r <= 5 ? 5 : 10) * p;
   }
 
-  FS.charts = { colorAt, colorFor, legend, rose, monthly, MODES, RAMP };
+  FS.charts = { colorAt, colorFor, legend, rose, monthly, maskDiagram, MODES, RAMP };
 })(window.FS);
