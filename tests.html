@@ -30,6 +30,7 @@
   <script src="js/masks.js"></script>
   <script src="js/thermal.js"></script>
   <script src="js/daylight.js"></script>
+  <script src="js/messages.js"></script>
   <script>
   (function () {
     'use strict';
@@ -391,6 +392,28 @@
       // pièce 4 × 5 × 2,7 m → A = 2(20 + 10,8 + 13,5) = 88,6 m² ; R = 0,5 → 1 − R² = 0,75
       // FLJm = 0,78 × 3,6 × 90 × 0,9 / (88,6 × 0,75) = 227,45 / 66,45 = 3,42 %
       near('FLJm d\'une pièce type, calcul à la main', FS.daylight.adf({ TL: 0.78, Aw: 3.6, theta: 90, M: 0.9, W: 4, d: 5, h: 2.7, R: 0.5 }), 3.423, 0.002, ' %');
+    }
+
+    // ------------------------------------------------------------------
+    section('8. Messages clés de la fiche offre');
+    {
+      // Cas fictif : une façade sud très vitrée et masquée, une façade nord, deux variantes
+      const fac = (id, label, az, o) => Object.assign({ id, label, az, area: 300, glazed: 120, annual: 600, annual0: 800, winter: 300, summer: 300, peak: 700,
+        maskLoss: 0.25, shareSummer: 0, monthly: [], hourly: new Float32Array(1) }, o);
+      const R = { masks: true, facades: [fac(1, 'S', 180, { shareSummer: 0.8, winter: 420 }), fac(2, 'N', 0, { shareSummer: 0.2, annual: 300, annual0: 340, maskLoss: 0.12 })],
+        totals: { incident: 270000, incident0: 342000 } };
+      const v = (name, QH, QC, peak) => ({ variant: { name, Uw: 1.4, g: 0.6, TL: 0.78 }, totals: { area: 600, floor: 1000, QH, QC, Qsol: 0, peakGainFloor: peak },
+        facades: [{ id: 1, label: 'S', area: 300, peakGainFloor: peak, QH: QH / 2, QC: QC / 2 }, { id: 2, label: 'N', area: 300, peakGainFloor: 10, QH: QH / 2, QC: QC / 2 }] });
+      const TR = [v('Double ancien', 30000, 20000, 90), v('Contrôle solaire', 34000, 9000, 40)];
+      const DL = [{ id: 1, label: 'S', pignon: false, low: { vsc: 0.10, adf: 1.2 } }, { id: 2, label: 'N', pignon: false, low: { vsc: 0.30, adf: 2.5 } }];
+      const P = { thermal: Object.assign(FS.thermal.defaults(), { ref: 0, protection: { mode: 'gtot', fc: 0.25, gtot: 0.1, threshold: 300 } }), floorH: 3 };
+      const msgs = FS.messages.generate({ P, D: null, R, TR, DL, climate: null });
+      const txt = msgs.map((m) => m.text).join(' | ');
+      check('Entre 3 et 5 messages', msgs.length >= 3 && msgs.length <= 5, msgs.length + ' messages');
+      check('Concentration des apports d\'été repérée (façade sud, 80 %)', /façade 1 \(sud\) concentre 80 %/.test(txt), txt.slice(0, 160) + '…');
+      check('Risque d\'inconfort élevé signalé (90 W/m²)', /90 W\/m².*élevé/.test(txt), '');
+      check('Arbitrage hiver / été entre variantes', /Arbitrage hiver \/ été/.test(txt), '');
+      check('Messages triés par importance', msgs.every((m, i) => i === 0 || msgs[i - 1].score >= m.score), msgs.map((m) => Math.round(m.score)).join(' ≥ '));
     }
 
     document.getElementById('title').textContent = nKo ? nKo + ' test(s) en échec sur ' + (nOk + nKo) : 'Tous les tests passent (' + nOk + ')';

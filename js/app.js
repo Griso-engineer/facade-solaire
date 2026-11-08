@@ -443,9 +443,18 @@
       <li><b>Validation</b> : VSC d'un mur dégagé 39,6 % ; derrière une obstruction infinie de 25°, VSC de 27,3 %, cohérent
         avec la règle des 25° du BRE (27 %) ; FLJm d'une pièce type contre un calcul à la main.</li>
     </ul>
-    <h3>À venir</h3>
+    <h3>Fiche offre</h3>
     <ul>
-      <li>Étape 6 : fiche offre imprimable.</li>
+      <li>Deux pages A4 paysage imprimables en PDF par le navigateur : vue 3D (cadrage, date, heure et coloration de
+        l'onglet Maquette 3D), carte, messages clés, synthèse par façade, hypothèses ; en annexe, variantes de vitrage,
+        rose des orientations, lumière et méthode résumée.</li>
+      <li><b>Messages clés</b> : générés par règles à partir des résultats, chacun avec un score d'importance ; on garde les
+        3 à 5 premiers. Règles : concentration des apports d'été sur une orientation (≥ 30 %), effet chiffré d'une
+        protection extérieure mobile sur le froid, risque d'inconfort d'été (pic d'apports), poids des masques,
+        arbitrage hiver / été entre variantes, lumière contrainte (VSC &lt; 15 %), apports d'hiver valorisables.
+        Ce sont des pistes de discussion, à relire avant envoi.</li>
+      <li>Lien direct vers un bâtiment : <code>?lat=48.8358&amp;lon=2.3745&amp;r=150&amp;nom=…</code> ouvre un nouveau projet
+        sur le bâtiment situé à ces coordonnées.</li>
     </ul>
     <h3>Sources des données</h3>
     <p>Fond de carte, emprises et hauteurs : © contributeurs OpenStreetMap, licence ODbL.
@@ -460,6 +469,7 @@
     document.querySelectorAll('#nav a').forEach((a) => a.classList.toggle('active', a.dataset.route === key));
     if (key === 'site') FS.map.invalidateSize();
     if (key === '3d') FS.scene3d.redraw();
+    if (key === 'fiche') FS.uiReport.onShow();
   }
 
   // ---------- Projet : nouveau, import, export ----------
@@ -495,7 +505,7 @@
     pages.resultats = FS.uiResults.build();
     pages.thermique = FS.uiThermal.build();
     pages.lumiere = FS.uiDaylight.build();
-    buildSoon('fiche', '07', 'Fiche offre', 'Synthèse imprimable A4 paysage.', 6);
+    pages.fiche = FS.uiReport.build();
     buildMethod();
     wireProject();
     window.addEventListener('hashchange', route);
@@ -503,6 +513,18 @@
     route();
     refreshSite(); refresh3dSide();
     FS.uiResults.refresh();
+    // Lien direct vers un bâtiment : ?lat=48.8358&lon=2.3745[&r=150][&nom=…] → nouveau projet sur ce bâtiment
+    const q = new URLSearchParams(location.search);
+    const qlat = parseFloat(q.get('lat')), qlon = parseFloat(q.get('lon'));
+    if (isFinite(qlat) && isFinite(qlon)) {
+      FS.project.reset();
+      const P = FS.project.get();
+      if (q.get('r')) P.radius = FS.clamp(parseInt(q.get('r'), 10) || 150, 20, 500);
+      if (q.get('nom')) P.name = q.get('nom');
+      FS.map.flyTo(qlat, qlon);
+      FS.map.selectAt(qlat, qlon);
+      return;
+    }
     if (FS.project.get().target) FS.uiResults.ensureClimate();
     if (FS.project.get().target) FS.map.fit();
   }

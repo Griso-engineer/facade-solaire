@@ -301,7 +301,49 @@
     controls.update(); needs = true;
   }
 
-  function snapshot() { if (!renderer) return null; renderer.render(scene, camera); return renderer.domElement.toDataURL('image/png'); }
+  /* Image de la maquette (pour la fiche), à la taille demandée, avec les étiquettes des façades
+     dessinées dans l'image. La vue est celle de la caméra courante (ou le cadrage par défaut). */
+  function snapshot(w, h, opts = {}) {
+    if (!renderer) return null;
+    if (!host.clientWidth || opts.reframe) {
+      frame();
+      // un peu plus serré que le cadrage interactif
+      camera.position.sub(controls.target).multiplyScalar(0.8).add(controls.target);
+    }
+    const size = new THREE.Vector2();
+    renderer.getSize(size);
+    const pr = renderer.getPixelRatio();
+    renderer.setPixelRatio(1);
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h; camera.updateProjectionMatrix();
+    renderer.render(scene, camera);
+    const cv = document.createElement('canvas');
+    cv.width = w; cv.height = h;
+    const ctx = cv.getContext('2d');
+    ctx.drawImage(renderer.domElement, 0, 0, w, h);
+    // étiquettes
+    const v = new THREE.Vector3(), toCam = new THREE.Vector3();
+    ctx.font = '700 ' + Math.round(h / 24) + 'px Inter, system-ui, sans-serif';
+    ctx.textBaseline = 'middle';
+    for (const l of labels) {
+      if (!l.normal) continue;
+      if (toCam.copy(camera.position).sub(l.pos).dot(l.normal) < 0) continue;
+      v.copy(l.pos).project(camera);
+      if (v.z >= 1 || Math.abs(v.x) > 1 || Math.abs(v.y) > 1) continue;
+      const x = (v.x + 1) / 2 * w, y = (1 - v.y) / 2 * h;
+      const t = l.el.textContent, tw = ctx.measureText(t).width + 14, th = Math.round(h / 17);
+      ctx.fillStyle = l.el.classList.contains('mito') ? '#b9b8b3' : '#111110';
+      ctx.fillRect(x - tw / 2, y - th / 2, tw, th);
+      ctx.fillStyle = l.el.classList.contains('mito') ? '#111110' : '#ffffff';
+      ctx.fillText(t, x - tw / 2 + 7, y + 1);
+    }
+    // restauration
+    renderer.setPixelRatio(pr);
+    renderer.setSize(size.x || 300, size.y || 150, false);
+    camera.aspect = (size.x || 300) / (size.y || 150); camera.updateProjectionMatrix();
+    needs = true;
+    return cv.toDataURL('image/jpeg', 0.9);
+  }
   function redraw() { needs = true; }
 
   FS.scene3d = { init, build, updateSun, setColors, select, frame, snapshot, redraw, available, _debug: () => ({ renderer, scene, camera, sun, root }) };

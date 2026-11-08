@@ -19,7 +19,34 @@ façade, des masques, des apports et des ordres de grandeur des besoins.
 | 3 | Masques des voisins (horizon par point de façade) | fait |
 | 4 | Bilan thermique mensuel (ISO 13790 / 52016-1) et variantes de vitrage | fait |
 | 5 | Lumière naturelle : VSC et facteur de lumière du jour moyen (BRE) | fait |
-| 6 | Fiche offre A4 paysage | à venir |
+| 6 | Fiche offre A4 paysage | fait |
+
+## Utilisation en 10 minutes
+
+1. **Site** : chercher l'adresse, cliquer sur le bâtiment (ou dessiner l'emprise). Vérifier la hauteur,
+   la fraction vitrée, et corriger les voisins en orange (hauteur supposée) qui comptent.
+2. **Maquette 3D** : contrôler le volume et les façades ; choisir la vue, la date et l'heure qui serviront
+   à la fiche.
+3. **Exposition** : lire l'irradiation par façade, l'effet des masques et le diagramme de masque.
+4. **Thermique** : choisir 2 à 4 vitrages, la variante de référence et, si besoin, une protection solaire.
+5. **Lumière** : repérer les façades au VSC faible.
+6. **Fiche offre** : relire les messages clés, puis « Imprimer / enregistrer en PDF » (paysage, sans
+   marges, graphiques d'arrière-plan activés).
+
+Le projet s'enregistre dans le navigateur ; « Exporter » / « Importer » l'échangent en JSON. Un lien
+`…/facade-solaire/?lat=48.8358&lon=2.3745&r=150&nom=Mon%20projet` ouvre directement un bâtiment.
+
+## Fiche offre
+
+- **Page 1** : vue 3D colorée, carte avec façades numérotées, 3 à 5 messages clés, synthèse par façade
+  (irradiation, masques, part des apports d'été, pic, VSC, besoins de la variante de référence),
+  hypothèses principales, avertissement.
+- **Page 2** : variantes de vitrage (tableau et graphique), rose des orientations, lumière naturelle,
+  méthode résumée.
+- **Messages clés** : règles chiffrées, chacune avec un score ; on garde les 3 à 5 plus importantes
+  (concentration des apports d'été, effet d'une protection mobile, risque d'inconfort, masques,
+  arbitrage entre vitrages, lumière contrainte, apports d'hiver). À relire avant envoi.
+- Vérifiée en PDF (Edge) : deux pages A4 paysage de 297 × 210 mm, sans débordement.
 
 ## Lancer en local
 
@@ -71,6 +98,8 @@ fil des étapes : irradiation contre PVGIS, bilan thermique contre un calcul à 
 | `js/ui-thermal.js` | Onglet Thermique : hypothèses, variantes, comparaison |
 | `js/daylight.js` | VSC (BRE) et facteur de lumière du jour moyen (formule BRE simplifiée) |
 | `js/ui-daylight.js` | Onglet Lumière |
+| `js/messages.js` | Messages clés générés à partir des résultats |
+| `js/ui-report.js` | Fiche offre : deux pages A4 paysage, impression PDF |
 | `js/app.js` | Interface, onglets, enchaînement |
 | `tools/build-climate.html` | Régénère `js/climate-paris.js` (voir ci-dessous) |
 
@@ -120,6 +149,34 @@ fil des étapes : irradiation contre PVGIS, bilan thermique contre un calcul à 
   d'hiver que le satellite) ; ils restent sous 11 % de mars à octobre.
 - **Masques** : voir ci-dessous.
 
+### Régénérer le climat de secours
+
+`js/climate-paris.js` est produit par `tools/build-climate.html`, avec le même code que l'application.
+Serveur local lancé, puis :
+
+```bash
+"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" --headless --disable-gpu --virtual-time-budget=60000 --dump-dom http://localhost:8080/tools/build-climate.html > build.html
+```
+
+et copier le contenu du bloc `<pre id="out">` dans `js/climate-paris.js`.
+
+## Hypothèses et limites : masques
+
+- **Grille** : un point de calcul par maille d'environ 2 m × 3 m (un par étage) sur chaque segment de
+  façade, au plus environ 4 000 points ; la maquette 3D est colorée maille par maille.
+- **Horizon** : pour chaque point et chaque degré d'azimut devant le mur, élévation du plus haut
+  obstacle, atan((h − z)/d), d'après les arêtes des volumes voisins et du bâtiment étudié (auto-masque des
+  angles rentrants et des cours). Exact au degré près pour des prismes à toit plat.
+- **Effet sur le rayonnement** : direct et circumsolaire seulement si le soleil dépasse l'horizon du
+  point ; diffus isotrope × ciel vu (facteur de vue intégré sur le profil, rapporté au mur dégagé) ;
+  bande d'horizon de Perez × part des directions dégagées sous 6° ; réfléchi par le sol conservé.
+- **Non pris en compte** : arbres, relief lointain, balcons et débords, réflexions des façades
+  voisines, ombre portée sur le sol vu par la façade.
+- **Validation** : élévation devant un vis-à-vis infini à ± 0,05° ; ciel vu face à une obstruction
+  infinie d'angle β égal à 1 − sin β (solution analytique) à ± 0,01 ; auto-masque d'un bâtiment en L ;
+  300 voisins en environ 0,2 s. Sur un bloc réel du 13e (24 m de haut, 968 points, 75 voisins dans
+  300 m) : horizons en 0,16 s, calcul horaire complet en 0,3 s.
+
 ## Hypothèses et limites : bilan thermique
 
 > Ordres de grandeur pour comparer des variantes et hiérarchiser les façades. Pas de systèmes, de ponts
@@ -159,34 +216,6 @@ fil des étapes : irradiation contre PVGIS, bilan thermique contre un calcul à 
   moyenne des obstacles pondérée par cos φ (approximation de l'angle de ciel visible).
 - **Validation** : VSC d'un mur dégagé 39,6 % ; obstruction infinie de 25° → 27,3 % (règle des 25° du
   BRE : 27 %) ; FLJm contre un calcul à la main.
-
-## Hypothèses et limites : masques
-
-- **Grille** : un point de calcul par maille d'environ 2 m × 3 m (un par étage) sur chaque segment de
-  façade, au plus environ 4 000 points ; la maquette 3D est colorée maille par maille.
-- **Horizon** : pour chaque point et chaque degré d'azimut devant le mur, élévation du plus haut
-  obstacle, atan((h − z)/d), d'après les arêtes des volumes voisins et du bâtiment étudié (auto-masque des
-  angles rentrants et des cours). Exact au degré près pour des prismes à toit plat.
-- **Effet sur le rayonnement** : direct et circumsolaire seulement si le soleil dépasse l'horizon du
-  point ; diffus isotrope × ciel vu (facteur de vue intégré sur le profil, rapporté au mur dégagé) ;
-  bande d'horizon de Perez × part des directions dégagées sous 6° ; réfléchi par le sol conservé.
-- **Non pris en compte** : arbres, relief lointain, balcons et débords, réflexions des façades
-  voisines, ombre portée sur le sol vu par la façade.
-- **Validation** : élévation devant un vis-à-vis infini à ± 0,05° ; ciel vu face à une obstruction
-  infinie d'angle β égal à 1 − sin β (solution analytique) à ± 0,01 ; auto-masque d'un bâtiment en L ;
-  300 voisins en environ 0,2 s. Sur un bloc réel du 13e (24 m de haut, 968 points, 75 voisins dans
-  300 m) : horizons en 0,16 s, calcul horaire complet en 0,3 s.
-
-### Régénérer le climat de secours
-
-`js/climate-paris.js` est produit par `tools/build-climate.html`, avec le même code que l'application.
-Serveur local lancé, puis :
-
-```bash
-"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" --headless --disable-gpu --virtual-time-budget=60000 --dump-dom http://localhost:8080/tools/build-climate.html > build.html
-```
-
-et copier le contenu du bloc `<pre id="out">` dans `js/climate-paris.js`.
 
 ## Déployer
 
