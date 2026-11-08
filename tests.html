@@ -28,6 +28,7 @@
   <script src="js/climate-paris.js"></script>
   <script src="js/irradiance.js"></script>
   <script src="js/masks.js"></script>
+  <script src="js/thermal.js"></script>
   <script>
   (function () {
     'use strict';
@@ -303,6 +304,72 @@
         const r = M.compute(D);
         check('Quartier de 300 voisins : horizons de tous les points en moins de 2 s', r.ms < 2000, FS.fmt(r.nPts, 0) + ' points, ' + FS.fmt(r.ms, 0) + ' ms');
       }
+    }
+
+    // ------------------------------------------------------------------
+    section('6. Bilan thermique : calcul à la main');
+    {
+      const B = FS.thermal.balanceMonth;
+      /* Cas simple : façade sud 10 m × 3 m, fraction vitrée 50 % → A_w = 15 m², A_op = 15 m².
+         U_w = 1,4 ; U_p = 0,3 → H_tr = 1,4·15 + 0,3·15 = 25,5 W/K.
+         Zone de façade : profondeur 5 m, hauteur d'étage 3 m → A_f = 30/3·5 = 50 m², V = 150 m³.
+         Renouvellement d'air 0,5 vol/h → H_ve = 0,34·0,5·150 = 25,5 W/K → H = 51 W/K.
+         Inertie moyenne : C_m = 165 000·50 = 8,25·10⁶ J/K → τ = 8,25·10⁶/51/3600 = 44,93 h → a = 1 + τ/15 = 3,9956.
+         Apports internes : 5 W/m²·50 m²·744 h = 186 kWh.
+
+         Janvier : θe = 5 °C, θi = 20 °C, 744 h → Q_ht = 51·15·744/1000 = 569,16 kWh.
+         Irradiation 50 kWh/m² (sous le seuil de protection), g = 0,6, menuiserie 25 %, F_w = 0,9 :
+         Q_sol,w = 15·0,75·0,9·0,6·50 = 303,75 kWh ; Q_sol,op = 0,6·0,04·0,3·15·50 = 5,40 kWh.
+         Q_gn = 303,75 + 5,40 + 186 = 495,15 kWh ; γ = 495,15/569,16 = 0,86997.
+         γ^a = 0,57317 ; γ^(a+1) = 0,49864 ; η = (1 − 0,57317)/(1 − 0,49864) = 0,85135.
+         Q_H = 569,16 − 0,85135·495,15 = 147,6 kWh.
+
+         Juillet : θe = 21 °C, θc = 26 °C → Q_ht,C = 51·5·744/1000 = 189,72 kWh.
+         Irradiation 100 kWh/m² : Q_sol = 607,5 + 10,8 = 618,3 kWh ; Q_gn = 804,3 kWh ; γ = 4,2394.
+         γ^−a = 0,0031154 ; γ^−(a+1) = 0,00073486 ; η_ls = 0,99762.
+         Q_C = 804,3 − 0,99762·189,72 = 615,0 kWh. */
+      const H = 51, Cm = 165000 * 50;
+      const jan = B({ H, Cm, thetaE: 5, thetaH: 20, thetaC: 26, hours: 744, Qsol: 303.75 + 5.4, Qint: 186 });
+      near('τ de la zone de façade', jan.tau, 44.93, 0.01, ' h');
+      near('Janvier : déperditions Q_ht', jan.QhtH, 569.16, 0.01, ' kWh');
+      near('Janvier : facteur d\'utilisation des apports η_gn', jan.etaH, 0.85135, 0.0002);
+      near('Janvier : besoin de chauffage Q_H', jan.QH, 147.6, 0.2, ' kWh');
+      const jul = B({ H, Cm, thetaE: 21, thetaH: 20, thetaC: 26, hours: 744, Qsol: 607.5 + 10.8, Qint: 186 });
+      near('Juillet : facteur d\'utilisation des pertes η_ls', jul.etaC, 0.99762, 0.0002);
+      near('Juillet : besoin de froid Q_C', jul.QC, 615.0, 0.3, ' kWh');
+      check('Juillet : pas de chauffage (θe > θi)', jul.QH === 0, String(jul.QH));
+      // Cas limites
+      const noGain = B({ H, Cm, thetaE: 5, thetaH: 20, thetaC: 26, hours: 744, Qsol: 0, Qint: 0 });
+      near('Sans apports : Q_H = Q_ht', noGain.QH, noGain.QhtH, 1e-9, ' kWh');
+      const big = B({ H, Cm, thetaE: 15, thetaH: 20, thetaC: 26, hours: 744, Qsol: 5000, Qint: 0 });
+      check('Apports très supérieurs aux pertes : Q_H → 0', big.QH < 1, big.QH.toFixed(3) + ' kWh');
+      const hot = B({ H, Cm, thetaE: 28, thetaH: 20, thetaC: 26, hours: 744, Qsol: 100, Qint: 50 });
+      near('Extérieur plus chaud que la consigne : Q_C = Q_gn + |Q_ht,C|', hot.QC, 150 + 51 * 2 * 744 / 1000, 1e-9, ' kWh');
+
+      // Chaîne complète (FS.thermal.compute) sur la même façade, irradiation horaire uniforme
+      const n = 8760, month = new Uint8Array(n);
+      for (let h = 0; h < n; h++) month[h] = FS.climate.monthOfHour(h);
+      const hourly = new Float32Array(n);
+      for (let h = 0; h < n; h++) hourly[h] = month[h] === 0 ? 50000 / 744 : month[h] === 6 ? 100000 / 744 : 0;
+      const R = { sky: { n, month }, facades: [{ id: 1, label: 'S', az: 180, area: 30, glazed: 15, hourly }] };
+      const Dm = { model: { facades: [{ id: 1 }] } };
+      const tE = [5, 7, 9, 12, 16, 19, 21, 21, 17, 13, 9, 6];
+      const Tt = Object.assign(FS.thermal.defaults(), { variants: [{ name: 'test', Uw: 1.4, g: 0.6, TL: 0.78 }], ref: 0 });
+      const res = FS.thermal.compute(Dm, R, { monthly: { tTMY: tE } }, Tt, 3)[0].facades[0];
+      near('Chaîne complète : plancher de la zone', res.floor, 50, 1e-9, ' m²');
+      near('Chaîne complète : chauffage de janvier', res.months[0].QH, 147.6, 0.2, ' kWh');
+      near('Chaîne complète : froid de juillet', res.months[6].QC, 615.0, 0.3, ' kWh');
+      // Protection solaire : au-dessus du seuil, g → Fc·g
+      const hot400 = new Float32Array(n).fill(400);
+      const R2 = { sky: { n, month }, facades: [{ id: 1, label: 'S', az: 180, area: 30, glazed: 15, hourly: hot400 }] };
+      const T0 = Object.assign({}, Tt, { protection: { mode: 'none', fc: 0.25, gtot: 0.1, threshold: 300 } });
+      const T1 = Object.assign({}, Tt, { protection: { mode: 'fc', fc: 0.25, gtot: 0.1, threshold: 300 } });
+      const q0 = FS.thermal.compute(Dm, R2, { monthly: { tTMY: tE } }, T0, 3)[0].facades[0].Qsol;
+      const q1 = FS.thermal.compute(Dm, R2, { monthly: { tTMY: tE } }, T1, 3)[0].facades[0].Qsol;
+      near('Protection Fc = 0,25 active en permanence : apports vitrés × 0,25', q1 / q0, 0.25, 1e-9);
+      const T2 = Object.assign({}, Tt, { protection: { mode: 'fc', fc: 0.25, gtot: 0.1, threshold: 500 } });
+      const q2 = FS.thermal.compute(Dm, R2, { monthly: { tTMY: tE } }, T2, 3)[0].facades[0].Qsol;
+      near('Protection sous le seuil (400 < 500 W/m²) : sans effet', q2 / q0, 1, 1e-9);
     }
 
     document.getElementById('title').textContent = nKo ? nKo + ' test(s) en échec sur ' + (nOk + nKo) : 'Tous les tests passent (' + nOk + ')';

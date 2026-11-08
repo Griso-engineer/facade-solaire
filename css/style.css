@@ -284,3 +284,17 @@ table.tbl td.hl { font-weight: 800; }
 .chart .sundot { fill: #eb6834; stroke: var(--paper); stroke-width: 2; }
 .chart .sundot.off { fill: var(--paper); stroke: #eb6834; stroke-width: 1.5; }
 .charts-full { margin-top: 28px; }
+
+/* ---------- Thermique ---------- */
+.variants input[type="text"] { min-width: 150px; }
+.variants input[type="number"] { width: 72px; }
+.variants select { font-size: 12.5px; padding: 3px 5px; }
+.variants td, .variants th { vertical-align: middle; }
+.compare td.best { font-weight: 800; }
+.risk { display: inline-block; padding: 0 6px; font-size: 11.5px; font-weight: 700; }
+.risk.faible { background: var(--paper-2); }
+.risk.modere { background: rgba(255, 102, 0, .14); }
+.risk.eleve { background: rgba(250, 85, 79, .22); }
+.chart .val { fill: var(--ink-2); font-weight: 600; }
+.section-title { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; margin: 28px 0 8px; border-top: 1px solid var(--line); padding-top: 12px; }
+.compare td:first-child { min-width: 210px; }

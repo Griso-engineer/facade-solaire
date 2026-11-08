@@ -35,7 +35,9 @@
 
   function compute() {
     const D = FS.project.derived(), c = FS.climate.get();
-    R = (D.ok && c) ? FS.results.compute(D, c, FS.project.get().solar) : null;
+    const P0 = FS.project.get(), T0 = P0.thermal, v0 = T0.variants[Math.min(T0.ref, T0.variants.length - 1)];
+    // les apports vitrés de l'exposition utilisent le g de la variante de référence (onglet Thermique)
+    R = (D.ok && c) ? FS.results.compute(D, c, Object.assign({}, P0.solar, { g: v0 ? v0.g : 0.6 })) : null;
     if (R && (sel == null || !R.facades.some((f) => f.id === sel))) {
       sel = R.facades.length ? R.facades.reduce((a, f) => (f.annual > a.annual ? f : a)).id : null;
     }
@@ -63,8 +65,8 @@
     ui.chipsMask = chipsMask;
     const alb = el('input', { type: 'number', min: 0, max: 0.9, step: 0.05, value: P.solar.albedo });
     alb.addEventListener('change', () => { P.solar.albedo = FS.clamp(FS.num(alb.value, 0.2), 0, 0.9); FS.app.update('solar'); });
-    const g = el('input', { type: 'number', min: 0.05, max: 0.9, step: 0.05, value: P.solar.g });
-    g.addEventListener('change', () => { P.solar.g = FS.clamp(FS.num(g.value, 0.6), 0.05, 0.9); FS.app.update('solar'); });
+    const g = el('div', { class: 'status' });
+
     ui.alb = alb; ui.g = g;
     const side = el('aside', { class: 'side' },
       ui.climate,
@@ -74,8 +76,8 @@
         el('label', { class: 'field' }, 'Modèle du diffus sur les façades', chipsModel),
         el('div', { class: 'grid2' },
           el('label', { class: 'field' }, el('span', {}, 'Albédo du sol'), alb),
-          el('label', { class: 'field' }, el('span', {}, 'Facteur solaire g', el('small', {}, ' (provisoire)')), g)),
-        el('small', {}, 'Le facteur g sert aux apports à travers le vitrage ; les variantes de vitrage viendront avec le bilan thermique (étape 4).')));
+          el('label', { class: 'field' }, el('span', {}, 'Facteur solaire g'), g)),
+        el('small', {}, 'Les vitrages et protections solaires se règlent dans l\'onglet Thermique.')));
     page.append(el('div', { class: 'work' }, ui.main, side));
     document.getElementById('app').append(page);
     return page;
@@ -90,7 +92,7 @@
     ui.chipsSplit.querySelectorAll('.chip').forEach((c) => c.classList.toggle('on', c.dataset.m === (P.solar.split || 'erbs')));
     ui.chipsMask.querySelectorAll('.chip').forEach((c) => c.classList.toggle('on', c.dataset.m === String(P.solar.masks !== false)));
     if (document.activeElement !== ui.alb) ui.alb.value = P.solar.albedo;
-    if (document.activeElement !== ui.g) ui.g.value = P.solar.g;
+    { const T = P.thermal, v = T.variants[Math.min(T.ref, T.variants.length - 1)]; ui.g.textContent = FS.fmtFixed(v ? v.g : 0.6, 2) + ' : ' + (v ? v.name : '—') + ' (variante de référence, onglet Thermique)'; }
     if (D.ok && !loading) compute(); else if (!D.ok) R = null;
     renderClimate();
     apply3d();
@@ -157,7 +159,7 @@
     ui.main.append(el('p', { class: 'status', style: { marginTop: '6px' } },
       'Annuel, hiver, été : irradiation moyenne de la façade' + (R.masks ? ', masques compris' : '') + '. Dégagé : même façade sans aucun obstacle. ' +
       'Ciel vu : facteur de vue du ciel rapporté à un mur dégagé. Soleil direct : heures où au moins la moitié de la façade est au soleil, avec un direct > 120 W/m² (seuil OMM). ' +
-      'Apports : irradiation × surface vitrée × g = ' + FS.fmtFixed(P.solar.g, 2) + ', sans protection solaire. ' +
+      'Apports : irradiation × surface vitrée × g = ' + FS.fmtFixed(R.opts.g, 2) + ' (variante de référence), sans protection solaire ni menuiserie. ' +
       FS.fmt(R.nPts, 0) + ' points de calcul, horizons en ' + FS.fmt(R.msMasks, 0) + ' ms, calcul horaire en ' + FS.fmt(R.ms, 0) + ' ms.'));
 
     // graphiques
@@ -197,6 +199,7 @@
         'point plein : soleil visible à l\'heure pleine, point creux : masqué. Ciel vu depuis ce point : ' + FS.pct(pt.svf) + ' de celui d\'un mur dégagé.'));
     }
     ui.main.append(box);
+    if (FS.uiThermal) FS.uiThermal.refresh();
   }
   let maskLevel = 1;
 

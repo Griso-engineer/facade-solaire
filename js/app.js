@@ -26,7 +26,7 @@
     FS.map.render();
     refreshSite();
     refresh3dSide();
-    if (kind !== 'view' && kind !== 'mode') FS.scene3d.build();
+    if (kind !== 'view' && kind !== 'mode' && kind !== 'thermal') FS.scene3d.build();
     if (kind === 'target') FS.scene3d.frame();
     if (FS.uiResults) { FS.uiResults.refresh(); if (kind === 'target' || kind === 'geom') FS.uiResults.ensureClimate(); }
   }
@@ -398,13 +398,38 @@
         supérieur à 120 W/m² (seuil de l'OMM pour la durée d'insolation).</li>
       <li>Masques : perte d'irradiation annuelle par rapport à la même façade sans aucun obstacle. Ciel vu : facteur de vue
         du ciel moyen de la façade, rapporté à un mur dégagé.</li>
-      <li>Apports par les vitrages : irradiation × surface vitrée × facteur solaire g, sans protection solaire ni
-        masque ; le pic d'apports est le maximum horaire en été (kW).</li>
+      <li>Apports par les vitrages (onglet Exposition) : irradiation masquée × surface de baie × g de la variante de
+        référence, sans protection solaire ni menuiserie ; le pic d'apports est le maximum horaire en été (kW).</li>
       <li>Les échelles de couleur ont des bornes fixes (1 000 kWh/m²·an, 800 W/m²…) pour comparer les projets entre eux.</li>
+    </ul>
+    <h3>Bilan thermique</h3>
+    <p class="note warn">Ordres de grandeur pour comparer des variantes et hiérarchiser les façades. Ni STD, ni calcul réglementaire :
+    pas de systèmes, pas de ponts thermiques, pas de planchers ni de toiture, pas de scénarios d'occupation.</p>
+    <ul>
+      <li><b>Zone de façade</b> : la bande de plancher de profondeur p (5 m par défaut) derrière chaque façade, sur toute sa
+        hauteur ; plancher A<sub>f</sub> = surface de façade / hauteur d'étage × p.</li>
+      <li><b>Méthode mensuelle quasi-stationnaire</b> (NF EN ISO 13790:2008, reprise par l'EN ISO 52016-1) :
+        Q<sub>H</sub> = Q<sub>ht</sub> − η<sub>gn</sub>·Q<sub>gn</sub> et Q<sub>C</sub> = Q<sub>gn</sub> − η<sub>ls</sub>·Q<sub>ht</sub>,
+        avec les facteurs d'utilisation η = (1 − γ<sup>a</sup>)/(1 − γ<sup>a+1</sup>) (et la forme symétrique pour le froid),
+        a = 1 + τ/15 h, τ = C<sub>m</sub>/H.</li>
+      <li><b>Déperditions</b> : U<sub>w</sub> des baies, U<sub>p</sub> des parois opaques, et renouvellement d'air
+        (0,5 vol/h par défaut, sans récupération de chaleur : hygiène et infiltrations), H<sub>ve</sub> = 0,34·n·V.
+        Sans renouvellement d'air, le froid serait fortement surestimé et le chauffage sous-estimé.</li>
+      <li><b>Inertie</b> : C<sub>m</sub> = κ<sub>m</sub>·A<sub>f</sub>, κ<sub>m</sub> = 110, 165 ou 260 kJ/(m²·K)
+        (légère, moyenne, lourde ; ISO 13790, tableau 12).</li>
+      <li><b>Températures</b> : moyennes mensuelles de l'année type ; consignes de 20 °C (chauffage) et 26 °C (froid).</li>
+      <li><b>Apports solaires</b> : irradiation horaire de la façade, masques compris, × surface de baie × (1 − part de
+        menuiserie, 25 %) × F<sub>w</sub> (0,9, incidence non normale) × g. Parois opaques : α·R<sub>se</sub>·U<sub>p</sub>·A·I
+        (α = 0,6, R<sub>se</sub> = 0,04). Apports internes : 5 W/m² de plancher par défaut.</li>
+      <li><b>Protection solaire mobile</b> : fermée heure par heure quand l'irradiation de la façade dépasse 300 W/m²
+        (règle de l'ISO 13790) ; g devient F<sub>c</sub>·g, ou le g total saisi.</li>
+      <li><b>Pic d'apports</b> : apports solaires vitrés maximaux en été, rapportés au plancher de la zone. Repère
+        d'inconfort indicatif : faible &lt; 25 W/m², modéré 25–50, élevé &gt; 50.</li>
+      <li><b>Validation</b> : cas simple calculé à la main dans <code>tests.html</code> (façade sud 30 m², janvier et juillet),
+        retrouvé à 0,1 kWh près par la fonction de bilan et par la chaîne complète.</li>
     </ul>
     <h3>À venir</h3>
     <ul>
-      <li>Étape 4 : bilan thermique mensuel et variantes de vitrage.</li>
       <li>Étape 5 : lumière naturelle (VSC, facteur de lumière du jour moyen).</li>
       <li>Étape 6 : fiche offre imprimable.</li>
     </ul>
@@ -454,7 +479,7 @@
     buildSite();
     build3d();
     pages.resultats = FS.uiResults.build();
-    buildSoon('thermique', '05', 'Thermique', 'Bilan mensuel simplifié et comparaison de variantes de vitrage.', 4);
+    pages.thermique = FS.uiThermal.build();
     buildSoon('lumiere', '06', 'Lumière', 'Ciel visible (VSC) et facteur de lumière du jour moyen, en ordre de grandeur.', 5);
     buildSoon('fiche', '07', 'Fiche offre', 'Synthèse imprimable A4 paysage.', 6);
     buildMethod();

@@ -20,6 +20,7 @@
       view: { doy: FS.solar.doyOf(2026, 6, 21), hour: 15 },
       solar: { model: 'perez', split: 'erbs', albedo: 0.2, g: 0.6, color: 'annual', masks: true },
       climateInfo: null,       // source du climat utilisé (pour mémoire)
+      thermal: FS.thermal.defaults(),
       mapView: null
     };
   }
@@ -129,6 +130,8 @@
     const p = Object.assign(d, s);
     p.solar = Object.assign(defaults().solar, s.solar || {});
     p.nbDefaults = Object.assign(defaults().nbDefaults, s.nbDefaults || {});
+    p.thermal = Object.assign(FS.thermal.defaults(), s.thermal || {});
+    p.thermal.protection = Object.assign(FS.thermal.defaults().protection, (s.thermal && s.thermal.protection) || {});
     return p;
   }
 

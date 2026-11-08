@@ -194,10 +194,54 @@
     return svg;
   }
 
+  // ---------- Barres groupées (ex. chauffage / froid par variante ou par mois) ----------
+  /* cats : libellés ; series : [{ name, color, values }] ; opts : { unit, labels (valeurs sur les barres), title } */
+  function groupBars(cats, series, opts = {}) {
+    const W = 560, H = opts.height || 240, ml = 44, mr = 8, mt = 18, mb = opts.wrapLabels ? 40 : 26;
+    const iw = W - ml - mr, ih = H - mt - mb;
+    const vmax = Math.max(1e-6, ...series.flatMap((s) => s.values));
+    const step = niceStep(vmax / 4), top = Math.ceil(vmax / step) * step;
+    const y = (v) => mt + ih - ih * v / top;
+    const cw = iw / cats.length, gap = 2, bw = Math.min(42, (cw * 0.7 - gap * (series.length - 1)) / series.length);
+    const svg = S('svg', { viewBox: '0 0 ' + W + ' ' + H, class: 'chart bars', role: 'img', 'aria-label': opts.title || '' });
+    for (let v = 0; v <= top + 1e-9; v += step) {
+      svg.append(S('line', { x1: ml, x2: W - mr, y1: y(v), y2: y(v), class: v === 0 ? 'axis' : 'grid' }));
+      svg.append(S('text', { x: ml - 6, y: y(v) + 4, class: 'tick', 'text-anchor': 'end' }, FS.fmt(v, step < 1 ? 1 : 0)));
+    }
+    cats.forEach((c, i) => {
+      const x0 = ml + i * cw + (cw - (bw * series.length + gap * (series.length - 1))) / 2;
+      series.forEach((s, k) => {
+        const v = s.values[i], x = x0 + k * (bw + gap), h = Math.max(0, y(0) - y(v));
+        const r = Math.min(4, bw / 2, h);
+        const d = 'M' + x + ',' + y(0) + 'V' + (y(v) + r) + 'Q' + x + ',' + y(v) + ' ' + (x + r) + ',' + y(v) +
+          'H' + (x + bw - r) + 'Q' + (x + bw) + ',' + y(v) + ' ' + (x + bw) + ',' + (y(v) + r) + 'V' + y(0) + 'Z';
+        if (h > 0) svg.append(S('path', { d, fill: s.color, class: 'bar' }));
+        if (opts.labels) svg.append(S('text', { x: x + bw / 2, y: y(v) - 4, class: 'tick val', 'text-anchor': 'middle' }, FS.fmt(v, v < 10 ? 1 : 0)));
+      });
+      const lab = String(c);
+      if (opts.wrapLabels && lab.length > 14) {
+        const words = lab.split(' '), half = Math.ceil(words.length / 2);
+        svg.append(S('text', { x: ml + i * cw + cw / 2, y: H - 22, class: 'tick', 'text-anchor': 'middle' }, words.slice(0, half).join(' ')));
+        svg.append(S('text', { x: ml + i * cw + cw / 2, y: H - 9, class: 'tick', 'text-anchor': 'middle' }, words.slice(half).join(' ')));
+      } else svg.append(S('text', { x: ml + i * cw + cw / 2, y: H - 9, class: 'tick', 'text-anchor': 'middle' }, lab));
+      const hit = S('rect', { x: ml + i * cw, y: mt, width: cw, height: ih, class: 'hit' });
+      const tip = lab + series.map((s) => '\n' + s.name + ' : ' + FS.fmt(s.values[i], 1) + ' ' + (opts.unit || '')).join('');
+      hit.addEventListener('mousemove', (e) => FS.showTip(tip, e.clientX, e.clientY));
+      hit.addEventListener('mouseleave', FS.hideTip);
+      svg.append(hit);
+    });
+    const wrap = el('div', { class: 'chart-wrap' });
+    wrap.append(el('div', { class: 'legend-inline' }, series.map((s) => el('span', { style: { '--sw': s.color } }, s.name))));
+    wrap.append(svg);
+    return wrap;
+  }
+  // Couleurs des deux séries thermiques (palette catégorielle validée, emplacements 2 et 1)
+  const HEAT = '#eb6834', COOL = '#2a78d6';
+
   function niceStep(x) {
     const p = Math.pow(10, Math.floor(Math.log10(x))), r = x / p;
     return (r <= 1 ? 1 : r <= 2 ? 2 : r <= 2.5 ? 2.5 : r <= 5 ? 5 : 10) * p;
   }
 
-  FS.charts = { colorAt, colorFor, legend, rose, monthly, maskDiagram, MODES, RAMP };
+  FS.charts = { colorAt, colorFor, legend, rose, monthly, maskDiagram, groupBars, HEAT, COOL, MODES, RAMP };
 })(window.FS);

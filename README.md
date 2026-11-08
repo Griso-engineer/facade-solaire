@@ -17,7 +17,7 @@ façade, des masques, des apports et des ordres de grandeur des besoins.
 | 1 | Carte, emprise (OSM ou dessin), voisins, façades numérotées, maquette 3D et course du soleil | fait |
 | 2 | Climat horaire (Open-Meteo ERA5, secours Paris intégré), rayonnement sur façades (Perez) | fait |
 | 3 | Masques des voisins (horizon par point de façade) | fait |
-| 4 | Bilan thermique mensuel (ISO 13790 / 52016-1) et variantes de vitrage | à venir |
+| 4 | Bilan thermique mensuel (ISO 13790 / 52016-1) et variantes de vitrage | fait |
 | 5 | Lumière naturelle : VSC et facteur de lumière du jour moyen (BRE) | à venir |
 | 6 | Fiche offre A4 paysage | à venir |
 
@@ -67,6 +67,8 @@ fil des étapes : irradiation contre PVGIS, bilan thermique contre un calcul à 
 | `js/results.js` | Indicateurs par façade, avec ou sans masques : annuel, mensuel, hiver / été, pic, apports vitrés |
 | `js/charts.js` | Échelle de couleurs, rose des orientations, barres mensuelles (SVG) |
 | `js/ui-results.js` | Onglet Exposition, coloration de la maquette 3D |
+| `js/thermal.js` | Bilan mensuel quasi-stationnaire (ISO 13790), protections solaires, préréglages de vitrage |
+| `js/ui-thermal.js` | Onglet Thermique : hypothèses, variantes, comparaison |
 | `js/app.js` | Interface, onglets, enchaînement |
 | `tools/build-climate.html` | Régénère `js/climate-paris.js` (voir ci-dessous) |
 
@@ -115,6 +117,34 @@ fil des étapes : irradiation contre PVGIS, bilan thermique contre un calcul à 
   En hiver, les écarts mensuels au sud atteignent −20 à −25 % (ERA5 voit moins de journées claires
   d'hiver que le satellite) ; ils restent sous 11 % de mars à octobre.
 - **Masques** : voir ci-dessous.
+
+## Hypothèses et limites : bilan thermique
+
+> Ordres de grandeur pour comparer des variantes et hiérarchiser les façades. Pas de systèmes, de ponts
+> thermiques, de planchers ni de toiture, pas de scénarios d'occupation.
+
+- **Zone de façade** : bande de plancher de 5 m (réglable) derrière chaque façade, sur toute sa hauteur.
+- **Méthode** : mensuelle quasi-stationnaire, NF EN ISO 13790 (reprise par l'EN ISO 52016-1),
+  facteurs d'utilisation des apports (chauffage) et des pertes (froid), a = 1 + τ/15 h, τ = C_m/H.
+- **Déperditions** : U_w des baies, U_p des parois opaques (0,3 W/m²·K par défaut), renouvellement d'air
+  0,5 vol/h sans récupération (hygiène et infiltrations), réglable de 0 à 5 vol/h. Sans
+  renouvellement d'air, le froid serait surestimé de 40 à 90 % et le chauffage presque nul (test sur un bloc du 13e).
+- **Inertie** : κ_m = 110 / 165 / 260 kJ/(m²·K) de plancher (ISO 13790, tableau 12).
+- **Températures** : moyennes mensuelles de l'année type ; consignes de 20 °C et 26 °C.
+- **Apports solaires** : irradiation horaire masquée × baie × (1 − menuiserie, 25 %) × F_w (0,9) × g ;
+  parois opaques α·R_se·U_p·A·I ; apports internes de 5 W/m² de plancher.
+- **Protection solaire mobile** : fermée quand l'irradiation dépasse 300 W/m² ; g → F_c·g ou g total.
+- **Variantes** : 2 à 4, à partir de préréglages modifiables :
+
+  | Préréglage | U_w | g | TL |
+  |---|---|---|---|
+  | Double vitrage ancien | 2,9 | 0,75 | 0,80 |
+  | Double faible émissivité | 1,4 | 0,60 | 0,78 |
+  | Double contrôle solaire | 1,3 | 0,35 | 0,65 |
+  | Triple faible émissivité | 0,9 | 0,50 | 0,70 |
+
+- **Validation** : un cas simple calculé à la main (façade sud de 30 m², janvier et juillet) est
+  retrouvé à 0,1 kWh près, en appelant directement la fonction de bilan comme par la chaîne complète.
 
 ## Hypothèses et limites : masques
 
