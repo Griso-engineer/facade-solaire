@@ -23,6 +23,7 @@
   <script src="js/util.js"></script>
   <script src="js/solar.js"></script>
   <script src="js/osm.js"></script>
+  <script src="js/data.js"></script>
   <script src="js/building.js"></script>
   <script src="js/climate.js"></script>
   <script src="js/climate-paris.js"></script>
@@ -414,6 +415,48 @@
       check('Risque d\'inconfort élevé signalé (90 W/m²)', /90 W\/m².*élevé/.test(txt), '');
       check('Arbitrage hiver / été entre variantes', /Arbitrage hiver \/ été/.test(txt), '');
       check('Messages triés par importance', msgs.every((m, i) => i === 0 || msgs[i - 1].score >= m.score), msgs.map((m) => Math.round(m.score)).join(' ≥ '));
+    }
+
+    // ------------------------------------------------------------------
+    section('9. Cours intérieures, fenêtres, hauteurs IGN');
+    {
+      const RAD = Math.PI / 180;
+      // Carré 40 × 40 m avec une cour centrale de 12 × 12 m (anneau en sens horaire)
+      const outer = rect(-20, -20, 40, 40), hole = rect(-6, -6, 12, 12).reverse();
+      const m = FS.building.facades({ xy: outer, holes: [hole], height: 18 }, []);
+      const court = m.facades.filter((f) => f.cour);
+      check('Cour : 4 façades sur cour en plus des 4 du contour', m.facades.length === 8 && court.length === 4, m.facades.map((f) => f.id + f.label + (f.cour ? '(cour)' : '')).join(' '));
+      check('Façades sur cour orientées vers la cour (N, E, S, O)', court.map((f) => f.label).sort().join('') === 'ENOS', court.map((f) => f.label + ' ' + Math.round(f.az) + '°').join(', '));
+      const south = court.find((f) => f.label === 'N'); // mur sud de la cour, qui regarde vers le nord
+      check('Mur sud de la cour : normale vers le nord (dans la cour)', south && south.mid[1] < 0, south ? 'milieu y = ' + south.mid[1].toFixed(1) + ' m' : 'absent');
+      near('Emprise = 40² − 12²', m.footprintArea, 1600 - 144, 1e-6, ' m²');
+      near('Périmètre développé = 160 + 48', m.perimeter, 208, 1e-6, ' m');
+      check('Numérotation : contour d\'abord, puis cour', m.facades.slice(0, 4).every((f) => !f.cour) && m.facades.slice(4).every((f) => f.cour === 1), '');
+      // Auto-masque dans la cour : un point au pied du mur sud de la cour voit le mur nord à 12 m (18 m de haut)
+      const D = { xy: outer, holes: [hole], rings: [outer, hole], H: 18, nbs: [], model: m };
+      const E = FS.masks.obstacles(D);
+      const s = south.segs[0];
+      const hz = FS.masks.horizon([s.p0[0] + (s.p1[0] - s.p0[0]) / 2, s.p0[1] + s.n[1] * 0.1, 1.5], s.n, E, s.edge);
+      near('Cour : élévation du mur d\'en face = atan(16,5 / 12)', FS.masks.at(hz, 0) / RAD, Math.atan(16.5 / 11.9) / RAD, 0.3, '°');
+      // Fenêtres théoriques : la surface dessinée respecte la fraction vitrée
+      for (const [w, len, h] of [[0.4, 20, 18], [0.25, 14, 15], [0.6, 30, 24], [0.15, 9, 12]]) {
+        const r = FS.building.windows(len, h, 0, 3, w);
+        const a = r.reduce((s2, x) => s2 + (x.u1 - x.u0) * len * (x.z1 - x.z0), 0) / (len * h);
+        near('Fenêtres : ' + FS.pct(w) + ' demandés sur ' + len + ' × ' + h + ' m', a, w, 0.01);
+      }
+      check('Fenêtres : une rangée par étage', new Set(FS.building.windows(20, 18, 0, 3, 0.4).map((x) => x.z0.toFixed(2))).size === 6, '');
+      check('Fenêtres : aucune pour une façade aveugle', FS.building.windows(20, 18, 0, 3, 0).length === 0, '');
+      // Hauteurs BD TOPO
+      const d = { floorH: 3, defaultH: 15 };
+      const h1 = FS.data.height({ source: 'ign', props: { hauteur: 21.5, etages: 7 } }, d);
+      const h2 = FS.data.height({ source: 'ign', props: { hauteur: null, toit: 55, sol: 33.5 } }, d);
+      const h3 = FS.data.height({ source: 'ign', props: { hauteur: null, etages: 6 } }, d);
+      const h4 = FS.data.height({ source: 'ign', props: {} }, d);
+      check('IGN : attribut hauteur', h1.height === 21.5 && h1.src === 'ign', h1.height + ' m');
+      check('IGN : altitude du toit − altitude du sol', Math.abs(h2.height - 21.5) < 1e-9 && h2.src === 'ign-toit', h2.height + ' m');
+      check('IGN : nombre d\'étages × 3 m', h3.height === 18 && h3.src === 'ign-etages', h3.height + ' m');
+      check('IGN : sans donnée → hypothèse signalée', h4.height === 15 && FS.data.isHyp(h4.src), h4.height + ' m, ' + h4.src);
+      check('Paris est en France (source IGN)', FS.data.inFrance(48.857, 2.352) && !FS.data.inFrance(51.5, -0.12), '');
     }
 
     document.getElementById('title').textContent = nKo ? nKo + ' test(s) en échec sur ' + (nOk + nKo) : 'Tous les tests passent (' + nOk + ')';

@@ -43,12 +43,26 @@
     return b;
   }
 
-  /* target : { xy (anneau CCW), height }, neighbors : [{ xy, height }]
-     → { facades: [...], perimeter, footprintArea } */
+  /* target : { xy (contour extérieur, sens trigonométrique), holes (cours, sens horaire), height },
+     neighbors : [{ xy, height }] → { facades: [...], perimeter, footprintArea }
+     Les façades du contour sont numérotées d'abord, puis celles de chaque cour (f.cour = 1, 2…).
+     Les arêtes sont indexées globalement (contour puis cours) : s.edge sert à l'auto-masque. */
   function facades(target, neighbors) {
     const H = target.height;
-    const ring = target.xy;
     const nbs = neighbors.map((n) => ({ xy: n.xy, height: n.height, bbox: n.bbox || bbox(n.xy) }));
+    const holes = target.holes || [];
+    let off = 0, perimeter = 0, id = 0;
+    const all = [];
+    [target.xy].concat(holes).forEach((ring, ri) => {
+      const r = ringFacades(ring, off, H, nbs, ri > 0);
+      off += ring.length; perimeter += r.perimeter;
+      r.fac.forEach((f) => { f.id = ++id; f.cour = ri > 0 ? ri : 0; all.push(f); });
+    });
+    const area = Math.abs(G.area(target.xy)) - holes.reduce((a, h) => a + Math.abs(G.area(h)), 0);
+    return { facades: all, perimeter, footprintArea: area, height: H, courts: holes.length };
+  }
+
+  function ringFacades(ring, edgeOffset, H, nbs, isHole) {
     const n = ring.length;
 
     // 1. Sous-segments homogènes (même hauteur de voisin accolé)
@@ -75,7 +89,7 @@
           }
           cur.t1 = (lo + hi) / 2;
         }
-        cur = { edge: i, t0: cur ? cur.t1 : 0, t1: 1, zMin, n: nrm, az: azOf(nrm), a, dx, dy };
+        cur = { edge: edgeOffset + i, t0: cur ? cur.t1 : 0, t1: 1, zMin, n: nrm, az: azOf(nrm), a, dx, dy };
         subs.push(cur);
         tPrev = tm;
       }
@@ -170,15 +184,41 @@
       };
     });
     if (fac.length) {
-      fac.reverse(); // anneau trigonométrique → sens horaire
+      // contour : anneau trigonométrique → sens horaire ; cour : anneau déjà parcouru en sens horaire
+      if (!isHole) fac.reverse();
       let k = 0, best = Infinity;
       fac.forEach((f, i) => { const d = angDiff(f.az, 0) - f.length * 1e-4; if (d < best) { best = d; k = i; } });
       fac = fac.slice(k).concat(fac.slice(0, k));
-      fac.forEach((f, i) => { f.id = i + 1; });
     }
     const perimeter = subs.reduce((a, s) => a + s.len, 0);
-    return { facades: fac, perimeter, footprintArea: Math.abs(G.area(ring)), height: H };
+    return { fac, perimeter };
   }
 
-  FS.building = { facades, bbox, azOf, angDiff };
+  /* Fenêtres théoriques d'un segment de façade, au rythme parisien : une travée tous les ~2,7 m,
+     des portes-fenêtres plus hautes que larges, une rangée par étage, centrées dans la travée.
+     La surface vitrée dessinée vaut la fraction vitrée demandée (sauf plafonnement : vitrage ≤ 92 %
+     de la travée et de l'étage). → [{ u0, u1, z0, z1 }] (u : abscisse relative sur le segment). */
+  function windows(len, hTot, zMin, floorH, wwr) {
+    if (!(wwr > 0.005) || len < 1.2 || hTot < 1.5) return [];
+    const rows = Math.max(1, Math.round(hTot / floorH)), fh = hTot / rows;
+    let nb = Math.max(1, Math.round(len / 2.7)), ww = 0, hw = 0;
+    for (;;) {
+      const bay = len / nb, A = wwr * bay * fh;
+      hw = Math.min(0.72 * fh, 2.4); ww = A / hw;
+      if (ww > 0.8 * bay) { hw = Math.min(0.92 * fh, A / (0.8 * bay)); ww = Math.min(A / hw, 0.92 * bay); }
+      if (ww < 0.6 && nb > 1) { nb--; continue; }
+      break;
+    }
+    const out = [];
+    for (let r = 0; r < rows; r++) {
+      const z0 = zMin + r * fh + (fh - hw) * 0.6, z1 = Math.min(z0 + hw, zMin + (r + 1) * fh - 0.02);
+      for (let b = 0; b < nb; b++) {
+        const c = (b + 0.5) / nb, d = ww / 2 / len;
+        out.push({ u0: c - d, u1: c + d, z0, z1 });
+      }
+    }
+    return out;
+  }
+
+  FS.building = { facades, bbox, azOf, angDiff, windows };
 })(window.FS);

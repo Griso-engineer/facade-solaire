@@ -23,8 +23,16 @@ façade, des masques, des apports et des ordres de grandeur des besoins.
 
 ## Utilisation en 10 minutes
 
-1. **Site** : chercher l'adresse, cliquer sur le bâtiment (ou dessiner l'emprise). Vérifier la hauteur,
-   la fraction vitrée, et corriger les voisins en orange (hauteur supposée) qui comptent.
+1. **Site**, en quatre étapes à valider (le bouton passe au vert ; une modification ultérieure le
+   repasse en orange « à revalider ») :
+   1. *Localiser* : chercher l'adresse.
+   2. *Bâtiment étudié* : cliquer un contour bleu (tous les bâtiments de la vue sont cliquables) ou
+      dessiner l'emprise, puis ajouter les cours intérieures. Régler la hauteur : elle s'affiche sur la
+      carte au-dessus du bâtiment.
+   3. *Masques* : voisins lus automatiquement dans un rayon (avec leur hauteur IGN), ou dessinés à la
+      main ; corriger d'un clic les hauteurs supposées (en orange), ajouter ou retirer des bâtiments.
+   4. *Vitrage* : fraction vitrée globale puis « OK » pour l'appliquer à toutes les façades ; ajuster
+      façade par façade dans le tableau. Les fenêtres sont dessinées en 3D.
 2. **Maquette 3D** : contrôler le volume et les façades ; choisir la vue, la date et l'heure qui serviront
    à la fiche.
 3. **Exposition** : lire l'irradiation par façade, l'effet des masques et le diagramme de masque.
@@ -53,7 +61,7 @@ Le projet s'enregistre dans le navigateur ; « Exporter » / « Importer » l'é
 Scripts classiques, sans étape de build : `index.html` s'ouvre par double-clic.
 
 En `file://`, le navigateur n'envoie pas d'en-tête Referer : le fond de carte OpenStreetMap et la
-recherche d'adresse (Nominatim) peuvent alors être refusés. Overpass (bâtiments) fonctionne. Pour
+recherche d'adresse (Nominatim) peuvent alors être refusés. Les bâtiments (IGN, Overpass) fonctionnent. Pour
 un usage complet en local, sous Windows, sans rien installer :
 
 ```bash
@@ -82,10 +90,12 @@ fil des étapes : irradiation contre PVGIS, bilan thermique contre un calcul à 
 | `css/style.css` | Identité Tracés, thèmes clair et sombre, impression |
 | `js/util.js` | Espace de noms `FS`, DOM/SVG, formatage, stockage local, géométrie plane (projection locale) |
 | `js/solar.js` | Position du soleil (NOAA), heure légale (fuseau IANA), lever et coucher |
-| `js/osm.js` | Nominatim (adresse), Overpass (bâtiments), lecture des hauteurs |
+| `js/osm.js` | Nominatim (adresse), Overpass (bâtiments OSM), lecture des hauteurs OSM |
+| `js/data.js` | Bâtiments : BD TOPO IGN (WFS) en France, sinon OSM ; hauteurs |
 | `js/building.js` | Emprise → façades numérotées, détection des mitoyens et des héberges |
 | `js/project.js` | État du projet, valeurs par défaut, grandeurs dérivées, import / export JSON |
-| `js/map.js` | Carte Leaflet : sélection, dessin d'emprise, voisins, numéros de façades |
+| `js/map.js` | Carte : emprises cliquables, dessin (emprise, cours, voisins), hauteurs affichées |
+| `js/ui-site.js` | Onglet Site : quatre étapes avec validation, tableau des façades |
 | `js/scene3d.js` | Maquette three.js : extrusions, ombres portées, course du soleil, étiquettes |
 | `js/climate.js` | Open-Meteo (ERA5 2015–2024), année type, cache |
 | `js/climate-paris.js` | Climat de secours : année type de Paris, générée par `tools/build-climate.html` |
@@ -105,13 +115,19 @@ fil des étapes : irradiation contre PVGIS, bilan thermique contre un calcul à 
 
 ## Hypothèses et limites : géométrie et soleil
 
-- **Emprises** : OpenStreetMap (souvent issues du cadastre en France). Pour un multipolygone, seul
-  l'anneau extérieur principal est pris : les cours intérieures d'un même objet OSM ne sont pas
-  encore traitées. À Paris, les cours sont en général des vides entre bâtiments distincts, et sont
-  donc bien représentées.
-- **Hauteurs** : tag `height`, sinon `building:levels` × 3 m (+ ½ niveau par niveau de comble),
-  sinon 15 m. Les deux dernières sont des hypothèses, signalées en orange et modifiables
-  (globalement ou voisin par voisin, en cliquant sur la carte).
+- **Emprises** : en France, [BD TOPO](https://geoservices.ign.fr/bdtopo) de l'IGN, service WFS ouvert
+  de la Géoplateforme (`data.geopf.fr`, CORS, sans clé) : emprise cadastrale recalée de chaque
+  bâtiment, cours intérieures comprises. Hors de France, ou si l'IGN ne répond pas : OpenStreetMap
+  (Overpass), cours comprises pour les multipolygones. Emprise dessinable à la main, avec des cours.
+- **Hauteurs** : BD TOPO (attribut `hauteur` ; sinon altitude du toit − altitude du sol ; sinon
+  nombre d'étages × 3 m), ou OSM (`height`, sinon `building:levels` × 3 m) ; sans donnée, 15 m,
+  signalé en orange et modifiable. Dans les îlots parisiens testés, 93 à 99 % des bâtiments de la
+  BD TOPO ont une hauteur.
+- **Voisins** : lus dans un rayon (et complétés d'un clic ou d'un dessin), ou uniquement dessinés.
+- **Cours** : façades numérotées après le contour, normale vers la cour, et obstacles pour les autres
+  murs de la cour (auto-masque).
+- **Fenêtres 3D** : théoriques, au rythme parisien (travée ≈ 2,7 m, portes-fenêtres, une rangée par
+  étage), de surface égale à la fraction vitrée ; elles illustrent l'hypothèse sans entrer dans le calcul.
 - **Volumes** : prismes à toiture plate ; pas de toitures en pente, de saillies, de balcons, de végétation.
 - **Façades** : chaque côté est découpé en tronçons ; un tronçon est mitoyen si un voisin le touche
   (à moins de 0,6 m, sur la normale extérieure), et la limite du mitoyen est localisée par dichotomie
@@ -224,7 +240,8 @@ traitement Jekyll. `serve.ps1` et `tests.html` peuvent rester dans le dépôt.
 
 ## Données
 
-- Fond de carte, emprises et hauteurs : © contributeurs OpenStreetMap, licence ODbL.
+- Emprises et hauteurs en France : BD TOPO © IGN, Licence ouverte Etalab 2.0.
+- Fond de carte, et bâtiments hors de France : © contributeurs OpenStreetMap, licence ODbL.
 - Recherche d'adresse : Nominatim (OSM Foundation), usage modéré.
 - Climat : réanalyse ERA5 (Copernicus Climate Change Service), servie par Open-Meteo, CC BY 4.0.
 - Références de validation : PVGIS (Centre commun de recherche de la Commission européenne).

@@ -78,15 +78,21 @@
 
   /* Bâtiments autour d'un point. Renvoie [{ id, ll: [[lat, lon]...], tags }].
      Pour les multipolygones, seul l'anneau extérieur le plus grand est gardé. */
-  async function buildingsAround(lat, lon, radius) {
-    const q = '[out:json][timeout:30];(way["building"](around:' + Math.round(radius) + ',' + lat.toFixed(7) + ',' + lon.toFixed(7) +
-      ');relation["building"](around:' + Math.round(radius) + ',' + lat.toFixed(7) + ',' + lon.toFixed(7) + '););out tags geom qt;';
+  function buildingsAround(lat, lon, radius) {
+    return query('(around:' + Math.round(radius) + ',' + lat.toFixed(7) + ',' + lon.toFixed(7) + ')');
+  }
+  // bbox : [sud, ouest, nord, est]
+  function buildingsInBBox(b) {
+    return query('(' + b.map((v) => v.toFixed(6)).join(',') + ')');
+  }
+  async function query(filter) {
+    const q = '[out:json][timeout:30];(way["building"]' + filter + ';relation["building"]' + filter + ';);out tags geom qt;';
     const js = await overpass(q);
     const out = [];
     for (const e of js.elements || []) {
       const tags = e.tags || {};
       if (SKIP[tags.building]) continue;
-      let ll = null;
+      let ll = null, holes = [];
       if (e.type === 'way' && e.geometry) {
         ll = e.geometry.map((g) => [g.lat, g.lon]);
       } else if (e.type === 'relation' && e.members) {
@@ -94,17 +100,20 @@
           .map((m) => m.geometry.map((g) => [g.lat, g.lon]));
         const rings = joinWays(outer);
         if (rings.length) {
-          // anneau de plus grande étendue
+          // anneau de plus grande étendue, et ses cours intérieures
           const ar = (r) => Math.abs(FS.geo.area(r));
           rings.sort((a, b) => ar(b) - ar(a));
           ll = rings[0];
+          const inner = joinWays(e.members.filter((m) => m.type === 'way' && m.role === 'inner' && m.geometry)
+            .map((m) => m.geometry.map((g) => [g.lat, g.lon])));
+          holes = inner.filter((h) => FS.geo.inside(h[0], ll));
         }
       }
       if (!ll || ll.length < 4) continue;
-      out.push({ id: e.type[0] + e.id, ll, tags });
+      out.push({ id: e.type[0] + e.id, ll, holes, tags, source: 'osm' });
     }
     return out;
   }
 
-  FS.osm = { search, buildingsAround, heightFromTags, parseLen };
+  FS.osm = { search, buildingsAround, buildingsInBBox, heightFromTags, parseLen };
 })(window.FS);

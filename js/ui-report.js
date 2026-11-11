@@ -158,8 +158,8 @@
   }
 
   function hypText(P, D, R, c, ref) {
-    const nb = P.neighbors, hyp = nb.filter((n) => n.src === 'default').length;
-    const H = 'Hauteur ' + FS.fmt(D.H, 1) + ' m (' + ({ height: 'OSM', levels: 'niveaux OSM', default: 'hypothèse', user: 'saisie' }[P.heightSrc] || '') + '), ';
+    const nb = FS.project.effectiveNeighbors(P), hyp = nb.filter((n) => n.src === 'default').length;
+    const H = 'Hauteur ' + FS.fmt(D.H, 1) + ' m (' + (FS.data.SRC_LABEL[P.heightSrc] || '') + '), ';
     return H + 'fraction vitrée ' + FS.pct(P.wwr) + (Object.keys(P.wwrOver).length ? ' (surchargée sur certaines façades)' : '') + '. ' +
       nb.length + ' bâtiments voisins dans ' + P.radius + ' m' + (hyp ? ', dont ' + hyp + ' de hauteur supposée (' + FS.fmt(P.nbDefaults.defaultH, 0) + ' m)' : '') + '. ' +
       'Climat : ' + (c ? c.label + (c.fallback ? ' (secours)' : '') : '—') + '. Masques ' + (R.masks ? 'compris' : 'non compris') + ', albédo ' + FS.fmtFixed(P.solar.albedo, 2) + '. ' +
@@ -167,7 +167,7 @@
   }
 
   function methodText(c) {
-    return 'Emprises et hauteurs OpenStreetMap ; volumes à toit plat. Soleil : algorithme NOAA. Climat : année type construite sur la réanalyse ERA5 ' +
+    return 'Emprises et hauteurs : BD TOPO de l\'IGN (OpenStreetMap hors de France), cours intérieures comprises ; volumes à toit plat ; fenêtres théoriques au rythme parisien. Soleil : algorithme NOAA. Climat : année type construite sur la réanalyse ERA5 ' +
       (c ? c.years.join('–') : '') + ' (Open-Meteo), méthode de l\'ISO 15927-4. Rayonnement sur les façades : décomposition d\'Erbs, modèle de ciel de Perez, ' +
       'réfléchi par le sol ; écart à PVGIS inférieur à 4 % sur des façades sud, est et ouest dégagées à Paris. Masques : profil d\'horizon au degré près en chaque point ' +
       'de façade (≈ 2 m × 3 m), voisins et bâtiment lui-même. Besoins : méthode mensuelle quasi-stationnaire (NF EN ISO 13790) sur une zone de façade, ' +
@@ -186,8 +186,8 @@
     const loaded = new Promise((resolve) => { tiles.once('load', resolve); tiles.once('tileerror', resolve); });
     tiles.addTo(map);
     L.control.scale({ imperial: false, position: 'bottomleft' }).addTo(map);
-    for (const nb of P.neighbors) L.polygon(nb.ll, { color: '#6e6d69', weight: 0.8, fillColor: '#6e6d69', fillOpacity: 0.3, interactive: false }).addTo(map);
-    L.polygon(P.target.ll, { color: '#4284f4', weight: 2, fillColor: '#4284f4', fillOpacity: 0.45, interactive: false }).addTo(map);
+    for (const nb of FS.project.effectiveNeighbors(P)) L.polygon(nb.ll, { color: '#6e6d69', weight: 0.8, fillColor: '#6e6d69', fillOpacity: 0.3, interactive: false }).addTo(map);
+    L.polygon([P.target.ll].concat(P.target.holes || []), { color: '#4284f4', weight: 2, fillColor: '#4284f4', fillOpacity: 0.45, interactive: false }).addTo(map);
     for (const f of D.model.facades) {
       const off = 3 + 0.3 * Math.sqrt(f.length);
       const m = D.proj.toLL(f.mid[0] + f.n[0] * off, f.mid[1] + f.n[1] * off);

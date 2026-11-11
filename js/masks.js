@@ -44,13 +44,15 @@
   /* Obstacles : liste d'arêtes { ax, ay, bx, by, h, self, edge } avec boîte englobante. */
   function obstacles(D) {
     const E = [];
-    const add = (xy, h, self) => {
+    const add = (xy, h, self, off) => {
       for (let i = 0; i < xy.length; i++) {
         const a = xy[i], b = xy[(i + 1) % xy.length];
-        E.push({ ax: a[0], ay: a[1], bx: b[0], by: b[1], h, self, edge: i });
+        E.push({ ax: a[0], ay: a[1], bx: b[0], by: b[1], h, self, edge: (off || 0) + i });
       }
     };
-    add(D.xy, D.H, true);
+    // bâtiment étudié : contour puis cours, avec la même numérotation globale des arêtes que FS.building
+    let off = 0;
+    for (const ring of (D.rings || [D.xy])) { add(ring, D.H, true, off); off += ring.length; }
     for (const nb of D.nbs) if (nb.height > 0) add(nb.xy, nb.height, false);
     return E;
   }

@@ -6,7 +6,7 @@
   let renderer, scene, camera, controls, sun, hemi, root, sunMesh, pathLine, groundMesh;
   let host, labelBox, readout, facadeMeshes = [], labels = [], needs = true, raf = 0;
   let colors = null; // fonction de coloration des mailles de façade (résultats), ou null
-  let matNeutral = null, matResult = null;
+  let matNeutral = null, matResult = null, winGlass = null, winFrames = null;
   let selected = null, onPick = null, extent = 150;
   const ray = new (window.THREE ? THREE.Raycaster : Object)();
 
@@ -122,13 +122,16 @@
     // bâtiment étudié : toiture
     const H = D.H;
     const tShape = new THREE.Shape(D.xy.map((p) => new THREE.Vector2(p[0], p[1])));
+    tShape.holes = (D.holes || []).map((h) => new THREE.Path(h.map((p) => new THREE.Vector2(p[0], p[1]))));
     const roofGeo = new THREE.ShapeGeometry(tShape);
     roofGeo.rotateX(-Math.PI / 2); roofGeo.translate(0, H, 0);
     const roof = new THREE.Mesh(roofGeo, new THREE.MeshLambertMaterial({ color: new THREE.Color(css('--scene-target')), side: THREE.DoubleSide }));
     roof.castShadow = true; roof.receiveShadow = true;
     root.add(roof);
-    const outline = D.xy.map((p) => v3(p[0], p[1], H + 0.05)); outline.push(outline[0]);
-    root.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(outline), edgeMat));
+    for (const ring of (D.rings || [D.xy])) {
+      const outline = ring.map((p) => v3(p[0], p[1], H + 0.05)); outline.push(outline[0]);
+      root.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(outline), edgeMat));
+    }
 
     // façades
     const cs = FS.masks.cellSize(D);
@@ -171,8 +174,30 @@
       ln.push(v3(s0.p0[0], s0.p0[1], s0.zMin), v3(s0.p0[0], s0.p0[1], H), v3(s1.p1[0], s1.p1[1], s1.zMin), v3(s1.p1[0], s1.p1[1], H));
       root.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(ln), edgeMat));
       addLabel(v3(f.mid[0] + f.n[0] * 1.5, f.mid[1] + f.n[1] * 1.5, (f.zMin + H) / 2),
-        f.id + ' · ' + f.label, f.pignon ? 'mito' : '', new THREE.Vector3(f.n[0], 0, -f.n[1]));
+        f.id + ' · ' + f.label + (f.cour ? ' (cour)' : ''), f.pignon ? 'mito' : '', new THREE.Vector3(f.n[0], 0, -f.n[1]));
     }
+
+    // fenêtres théoriques (rythme parisien), à la fraction vitrée de chaque façade
+    const glass = [], frames = [];
+    for (const f of D.model.facades) {
+      if (f.pignon) continue;
+      for (const s of f.segs) {
+        const rects = FS.building.windows(s.len, H - s.zMin, s.zMin, D.floorH || 3, f.wwr);
+        const o = 0.05; // légèrement devant le mur
+        const P = (u, z) => v3(s.p0[0] + (s.p1[0] - s.p0[0]) * u + s.n[0] * o, s.p0[1] + (s.p1[1] - s.p0[1]) * u + s.n[1] * o, z);
+        for (const r of rects) {
+          const a0 = P(r.u0, r.z0), b0 = P(r.u1, r.z0), b1 = P(r.u1, r.z1), a1 = P(r.u0, r.z1);
+          glass.push(a0, b0, b1, a0, b1, a1);
+          frames.push(a0, b0, b0, b1, b1, a1, a1, a0);
+        }
+      }
+    }
+    winGlass = new THREE.Mesh(new THREE.BufferGeometry().setFromPoints(glass),
+      new THREE.MeshLambertMaterial({ color: 0x33414e, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2 }));
+    winGlass.geometry.computeVertexNormals();
+    winFrames = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(frames),
+      new THREE.LineBasicMaterial({ color: ink, transparent: true, opacity: 0.55 }));
+    root.add(winGlass, winFrames);
 
     // soleil
     sunMesh = new THREE.Mesh(new THREE.SphereGeometry(4, 20, 14), new THREE.MeshBasicMaterial({ color: 0xff9f1c }));
@@ -210,6 +235,10 @@
       });
       attr.needsUpdate = true;
     }
+    // fenêtres : vitrage sombre en vue neutre ; seulement les cadres quand les façades portent des résultats
+    const show = FS.project.get().showWindows !== false;
+    if (winGlass) winGlass.visible = show && !colors;
+    if (winFrames) winFrames.visible = show;
     needs = true;
   }
   function select(id) { selected = id; refreshColors(); }
