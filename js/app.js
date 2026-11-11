@@ -349,6 +349,7 @@
       if (q.get('r')) P.radius = FS.clamp(parseInt(q.get('r'), 10) || 150, 20, 500);
       if (q.get('nom')) P.name = q.get('nom');
       FS.map.flyTo(qlat, qlon);
+      FS.uiSite.activate(2);
       FS.map.selectAt(qlat, qlon);
       return;
     }
