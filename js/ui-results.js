@@ -101,7 +101,7 @@
     { const T = P.thermal, v = T.variants[Math.min(T.ref, T.variants.length - 1)]; ui.g.textContent = FS.fmtFixed(v ? v.g : 0.6, 2) + ' : ' + (v ? v.name : '—') + ' (variante de référence, onglet Thermique)'; }
     if (D.ok && !loading) compute(); else if (!D.ok) R = null;
     renderClimate();
-    apply3d();
+    if (FS.view3d) FS.view3d.refresh();
     ui.main.innerHTML = '';
     if (!D.ok) { ui.main.append(el('p', { class: 'muted' }, 'Sélectionnez un bâtiment dans l\'onglet Site.')); return; }
     if (!R) { ui.main.append(el('p', { class: 'status' }, loading ? 'Calcul en attente du climat…' : 'Climat non chargé.')); return; }
@@ -124,7 +124,7 @@
     for (const f of fs) {
       tb.append(el('tr', { class: f.id === sel ? 'sel' : '', style: { cursor: 'pointer' }, onclick: () => { sel = f.id; FS.scene3d.select(f.id); refresh(); } },
         el('td', {}, el('b', {}, f.id)),
-        el('td', { style: { whiteSpace: 'nowrap' } }, el('span', { class: 'swatch', style: { background: FS.charts.colorFor(P.solar.color === 'none' ? 'annual' : P.solar.color, f) } }), f.label),
+        el('td', { style: { whiteSpace: 'nowrap' } }, el('span', { class: 'swatch', style: { background: FS.charts.colorFor(FS.view3d.roseMode(), f) } }), f.label),
         el('td', { class: 'num' }, Math.round(f.az) + '°'),
         el('td', { class: 'num' }, FS.fmt(f.area, 0)),
         el('td', { class: 'num' }, FS.fmt(f.glazed, 0)),
@@ -173,7 +173,7 @@
     let ref = new Array(12).fill(0), refName = 'Moyenne des façades';
     if (R.masks) { ref = f.monthly0; refName = 'Même façade, sans masques'; }
     else for (const x of fs) x.monthly.forEach((v, i) => { ref[i] += v * x.area / T.area; });
-    const modeR = P.solar.color === 'none' ? 'annual' : P.solar.color;
+    const modeR = FS.view3d.roseMode();
     ui.main.append(el('div', { class: 'charts2' },
       el('div', {},
         el('div', { class: 'chart-head' }, el('h3', {}, 'Rose des orientations'), el('small', {}, FS.charts.MODES[modeR].label + ', ' + FS.charts.MODES[modeR].unit)),
@@ -231,49 +231,5 @@
     box.append(el('small', {}, 'GHI : rayonnement global horizontal, kWh/m². Année type : mois réels les plus représentatifs de ' + c.years.join('–') + ' ; « moy. » : moyenne de toutes les années.'));
   }
 
-  // ---------- 3D : coloration ----------
-  function attach3d(viewport, sideHost) {
-    ui.legend3d = el('div', {});
-    viewport.append(ui.legend3d);
-    ui.chips3d = el('div', { class: 'chips' });
-    const modes = [['none', 'Neutre']].concat(Object.keys(FS.charts.MODES).map((k) => [k, FS.charts.MODES[k].label]));
-    for (const [k, lab] of modes) {
-      ui.chips3d.append(el('button', { class: 'chip', 'data-m': k, onclick: () => { FS.project.get().solar.color = k; FS.project.save(); refresh(); } }, lab));
-    }
-    sideHost.append(el('div', { class: 'panel' }, el('h3', {}, 'Coloration des façades'), ui.chips3d, ui.status3d = el('small', {})));
-  }
-
-  function apply3d() {
-    if (!ui.chips3d) return;
-    const P = FS.project.get(), mode = P.solar.color;
-    ui.chips3d.querySelectorAll('.chip').forEach((c) => c.classList.toggle('on', c.dataset.m === mode));
-    ui.legend3d.innerHTML = '';
-    if (mode === 'none' || !R) {
-      FS.scene3d.setColors(null);
-      ui.status3d.textContent = mode !== 'none' && !R ? (loading ? 'Chargement du climat…' : 'Résultats indisponibles.') : '';
-      return;
-    }
-    // une couleur par maille (point de calcul)
-    const bySeg = {};
-    for (const f of R.facades) { bySeg[f.id] = {}; for (const c of f.cells) bySeg[f.id][c.si] = c; }
-    FS.scene3d.setColors((id, si, k) => {
-      const c = bySeg[id] && bySeg[id][si];
-      const v = c && c.v[k];
-      return v ? FS.charts.colorFor(mode, v) : null;
-    });
-    ui.legend3d.append(FS.charts.legend(mode));
-    ui.status3d.textContent = (R.masks ? 'Avec les masques des voisins et du bâtiment lui-même' : 'Sans masques') +
-      ' : une maille par point de calcul (≈ ' + FS.fmt(R.M.cs.dx, 1) + ' m × ' + FS.fmt(R.M.cs.dz, 1) + ' m). Survolez une façade pour ses valeurs.';
-  }
-
-  function tipFor(id) {
-    if (!R) return '';
-    const f = R.facades.find((x) => x.id === id);
-    if (!f) return '';
-    return '\n' + FS.fmt(f.annual, 0) + ' kWh/m²·an (hiver ' + FS.fmt(f.winter, 0) + ', été ' + FS.fmt(f.summer, 0) + ')' +
-      (R.masks ? '\nMasques : −' + FS.pct(f.maskLoss) + ' (' + FS.fmt(f.annual0, 0) + ' sans masque)' : '') +
-      '\nPic d\'été ' + FS.fmt(f.peak, 0) + ' W/m²';
-  }
-
-  FS.uiResults = { build, refresh, ensureClimate, attach3d, tipFor, get: () => R, select: (id) => { sel = id; } };
+  FS.uiResults = { build, refresh, ensureClimate, get: () => R, select: (id) => { sel = id; } };
 })(window.FS);

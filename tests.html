@@ -29,6 +29,7 @@
   <script src="js/climate-paris.js"></script>
   <script src="js/irradiance.js"></script>
   <script src="js/masks.js"></script>
+  <script src="js/instant.js"></script>
   <script src="js/thermal.js"></script>
   <script src="js/daylight.js"></script>
   <script src="js/messages.js"></script>
@@ -457,6 +458,31 @@
       check('IGN : nombre d\'étages × 3 m', h3.height === 18 && h3.src === 'ign-etages', h3.height + ' m');
       check('IGN : sans donnée → hypothèse signalée', h4.height === 15 && FS.data.isHyp(h4.src), h4.height + ' m, ' + h4.src);
       check('Paris est en France (source IGN)', FS.data.inFrance(48.857, 2.352) && !FS.data.inFrance(51.5, -0.12), '');
+    }
+
+    // ------------------------------------------------------------------
+    section('10. Maquette 3D : éclairement instantané (ciel clair)');
+    {
+      const I = FS.instant, RAD = Math.PI / 180;
+      // Ciel clair ASHRAE le 21 décembre, soleil à 17,7° : DNI = 1233·exp(−0,142 / sin 17,7°) ≈ 773 W/m²
+      const cs = I.clearSky(17.7, 355);
+      near('ASHRAE, 21 décembre, h = 17,7° : DNI', cs.dni, 1233 * Math.exp(-0.142 / Math.sin(17.7 * RAD)), 0.5, ' W/m²');
+      // Mur sud dégagé à midi solaire le 21 décembre, ciel isotrope :
+      // DNI·cos 17,7° + DHI/2 + 0,2·GHI/2
+      const t = FS.solar.localToUTC(2026, 355, 12.85, 'Europe/Paris');
+      const sk = I.skyAt(t, 48.857, 2.352, 355, { model: 'isotrope' });
+      const free = { buried: false, hz: null, svf: 1, hb: 1 };
+      const v = I.pointI(sk, [0, -1], free, 0.2, true);
+      const exp = sk.dni * Math.cos(sk.alt) * Math.cos((FS.solar.position(t, 48.857, 2.352).azimuth - 180) * RAD) + sk.dhi / 2 + 0.2 * sk.ghi / 2;
+      near('Mur sud à midi le 21 décembre (≈ 790 W/m²)', v, exp, 0.5, ' W/m²');
+      check('Ordre de grandeur : 700 à 850 W/m² par ciel clair d\'hiver', v > 700 && v < 850, FS.fmt(v, 0) + ' W/m²');
+      // Mur nord au même instant : diffus et réfléchi seulement (< 150 W/m²)
+      const vn = I.pointI(sk, [0, 1], free, 0.2, true);
+      check('Mur nord à midi le 21 décembre : diffus + réfléchi seulement', vn > 0 && vn < 150, FS.fmt(vn, 0) + ' W/m²');
+      // Soleil masqué (horizon à 30° vers le sud) : il ne reste que le diffus et le réfléchi
+      const hz = new Float32Array(360).fill(30 * RAD);
+      const vm = I.pointI(sk, [0, -1], { buried: false, hz, svf: 1, hb: 1 }, 0.2, true);
+      near('Mur sud masqué : direct supprimé', vm, sk.dhi / 2 + 0.2 * sk.ghi / 2, 0.5, ' W/m²');
     }
 
     document.getElementById('title').textContent = nKo ? nKo + ' test(s) en échec sur ' + (nOk + nKo) : 'Tous les tests passent (' + nOk + ')';

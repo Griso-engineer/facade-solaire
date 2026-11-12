@@ -424,3 +424,14 @@ table.sh-tbl th, table.sh-tbl td { padding: 0.9mm 1.1mm; }
 .fp-clickable { cursor: pointer; }
 .pop { display: grid; gap: 6px; min-width: 190px; }
 .pop .row-actions { margin-top: 2px; }
+
+/* ---------- Maquette 3D : coloration ---------- */
+.color-panel h3 { display: flex; justify-content: space-between; align-items: baseline; }
+.col-groups { display: grid; gap: 8px; }
+.col-title { font-size: 11.5px; font-weight: 700; color: var(--muted); margin-bottom: 3px; text-transform: none; }
+.subpanel { display: grid; gap: 8px; background: var(--paper-2); padding: 10px 12px; border-left: 3px solid var(--accent); }
+.legend-note { display: grid; gap: 6px; font-size: 12.5px; color: var(--ink-2); }
+.legend-note p { margin: 0; }
+.legend-note p + p { color: var(--muted); }
+table.tbl.compact { font-size: 12.5px; }
+table.tbl.compact td, table.tbl.compact th { padding: 3px 6px; }

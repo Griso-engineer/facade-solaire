@@ -33,7 +33,9 @@ façade, des masques, des apports et des ordres de grandeur des besoins.
       main ; corriger d'un clic les hauteurs supposées (en orange), ajouter ou retirer des bâtiments.
    4. *Vitrage* : fraction vitrée globale puis « OK » pour l'appliquer à toutes les façades ; ajuster
       façade par façade dans le tableau. Les fenêtres sont dessinées en 3D.
-2. **Maquette 3D** : contrôler le volume et les façades ; choisir la vue, la date et l'heure qui serviront
+2. **Maquette 3D** : choisir la coloration des façades (éclairement à une date et une heure en W/m²,
+   heures au-dessus de 300 W/m² sur une journée, moyenne par jour en kWh/m²·jour, pic d'été, ciel
+   visible) ; une légende explique chaque mode avec ses repères. Choisir la vue, la date et l'heure qui serviront
    à la fiche.
 3. **Exposition** : lire l'irradiation par façade, l'effet des masques et le diagramme de masque.
 4. **Thermique** : choisir 2 à 4 vitrages, la variante de référence et, si besoin, une protection solaire.
@@ -103,7 +105,9 @@ fil des étapes : irradiation contre PVGIS, bilan thermique contre un calcul à 
 | `js/masks.js` | Grille de points par façade, profils d'horizon, ciel vu |
 | `js/results.js` | Indicateurs par façade, avec ou sans masques : annuel, mensuel, hiver / été, pic, apports vitrés |
 | `js/charts.js` | Échelle de couleurs, rose des orientations, barres mensuelles (SVG) |
-| `js/ui-results.js` | Onglet Exposition, coloration de la maquette 3D |
+| `js/ui-results.js` | Onglet Exposition |
+| `js/instant.js` | Éclairement instantané et heures au-dessus de 300 W/m² (ciel clair ASHRAE), point par point |
+| `js/view3d.js` | Maquette 3D : modes de coloration, échelles, légendes et repères |
 | `js/thermal.js` | Bilan mensuel quasi-stationnaire (ISO 13790), protections solaires, préréglages de vitrage |
 | `js/ui-thermal.js` | Onglet Thermique : hypothèses, variantes, comparaison |
 | `js/daylight.js` | VSC (BRE) et facteur de lumière du jour moyen (formule BRE simplifiée) |

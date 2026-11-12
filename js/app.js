@@ -36,43 +36,18 @@
     const P = FS.project.get();
     const page = el('section', { class: 'page', id: 'page-3d', hidden: true });
     page.append(FS.blockHead('03', 'Maquette 3D',
-      'Bâtiment étudié en couleur, voisins en gris (teinte orangée : hauteur supposée). Réglez la date et l\'heure pour voir les ombres portées.'));
+      'Façades colorées selon le rayonnement reçu : à un instant choisi (W/m²), en heures au-dessus de 300 W/m² sur une journée, ou en moyenne journalière sur l\'année type. Voisins en gris (teinte orangée : hauteur supposée).'));
     const sceneBox = el('div', { id: 'scene' });
     const viewport = el('div', { class: 'viewport' }, sceneBox);
 
-    const doy = el('input', { type: 'range', min: 1, max: 365, step: 1, value: P.view.doy });
-    const hour = el('input', { type: 'range', min: 0, max: 24, step: 0.25, value: P.view.hour });
-    ui.doyLabel = el('b'); ui.hourLabel = el('b');
-    ui.doy = doy; ui.hour = hour;
-    const onView = () => { P.view.doy = +doy.value; P.view.hour = +hour.value; FS.project.save(); FS.scene3d.updateSun(); refresh3dSide(); };
-    doy.addEventListener('input', onView); hour.addEventListener('input', onView);
-    const quick = el('div', { class: 'chips' });
-    for (const [lab, m, d] of [['21 déc.', 12, 21], ['21 mars', 3, 21], ['21 juin', 6, 21], ['21 sept.', 9, 21], ['15 juil.', 7, 15]]) {
-      quick.append(el('button', { class: 'chip', onclick: () => { doy.value = FS.solar.doyOf(2026, m, d); onView(); } }, lab));
-    }
-    let anim = 0;
-    const play = el('button', {
-      class: 'btn sm', onclick: () => {
-        if (anim) { cancelAnimationFrame(anim); anim = 0; play.textContent = 'Animer la journée'; return; }
-        play.textContent = 'Arrêter';
-        const step = () => { let h = +hour.value + 0.05; if (h > 22) h = 4; hour.value = h; onView(); anim = requestAnimationFrame(step); };
-        anim = requestAnimationFrame(step);
-      }
-    }, 'Animer la journée');
-
     ui.fac3d = el('div', { class: 'tbl-wrap' });
     const side = el('aside', { class: 'side' },
-      el('div', { class: 'panel' }, el('h3', {}, 'Date et heure'),
-        el('div', { class: 'time-row' }, el('span', {}, 'Date'), doy, ui.doyLabel),
-        el('div', { class: 'time-row' }, el('span', {}, 'Heure légale'), hour, ui.hourLabel),
-        quick, el('div', { class: 'row-actions', style: { marginTop: 0 } }, play,
-          el('button', { class: 'btn sm ghost', onclick: () => FS.scene3d.frame() }, 'Recadrer'))),
+      FS.view3d.build(viewport),
       el('div', { class: 'panel' }, el('h3', {}, 'Façades'), ui.fac3d,
         el('small', {}, 'Cliquez une façade (ou une ligne) pour la sélectionner.')));
     page.append(el('div', { class: 'work' }, viewport, side));
     pages['3d'] = page;
     FS.$('#app').append(page);
-    FS.uiResults.attach3d(viewport, side);
     FS.scene3d.init(sceneBox, { onPick: (id) => { FS.scene3d.select(id); FS.uiResults.select(id); refresh3dSide(id); FS.uiResults.refresh(); } });
     FS.scene3d.build();
     FS.scene3d.frame();
@@ -83,10 +58,6 @@
     if (!ui.fac3d) return;
     if (selId !== undefined) sel3d = selId;
     const P = FS.project.get(), D = FS.project.derived();
-    const date = FS.solar.dateOfDoy(2026, P.view.doy).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', timeZone: 'UTC' });
-    ui.doyLabel.textContent = date; ui.hourLabel.textContent = FS.solar.fmtHour(P.view.hour);
-    if (document.activeElement !== ui.doy) ui.doy.value = P.view.doy;
-    if (document.activeElement !== ui.hour) ui.hour.value = P.view.hour;
     ui.fac3d.innerHTML = '';
     if (!D.ok) { ui.fac3d.append(el('p', { class: 'muted' }, 'Sélectionnez un bâtiment dans l\'onglet Site.')); return; }
     const tb = el('tbody');
@@ -192,6 +163,20 @@
       <li><b>Validation</b> : façades verticales non masquées à Paris, contre PVGIS 5.3 (base satellite SARAH3,
         2005–2023) : sud −4 %, est +1 %, ouest −3 %, nord +25 % (la façade nord ne reçoit que du diffus, où les modèles
         de ciel divergent le plus ; PVGIS utilise le modèle de Muneer). Détail dans <code>tests.html</code>.</li>
+    </ul>
+    <h3>Maquette 3D : coloration des façades</h3>
+    <ul>
+      <li>Échelle commune au rayonnement : du bleu foncé (peu) au corail (beaucoup), en passant par le jaune et l'orange ;
+        bornes fixes pour comparer les projets entre eux. Une couleur par maille de calcul (≈ 2 m × 3 m).</li>
+      <li><b>À la date et à l'heure</b> (W/m²) : éclairement reçu à cet instant par ciel clair (modèle ASHRAE, enveloppe
+        haute d'une journée sans nuages), ombres des voisins comprises ; les ombres portées de la maquette suivent la date et l'heure.</li>
+      <li><b>Heures &gt; 300 W/m²</b> sur une journée : durée pendant laquelle chaque zone de façade dépasse 300 W/m², seuil
+        usuel de fermeture d'une protection solaire mobile (NF EN ISO 13790), par ciel clair, au pas de 10 minutes.</li>
+      <li><b>Moyenne par jour</b> (kWh/m²·jour) sur l'année, l'hiver (octobre à avril, 212 jours) ou l'été (mai à septembre,
+        153 jours) : énergie reçue sur la période, année type, divisée par le nombre de jours, nuits comprises. Ce n'est pas
+        une moyenne sur les seules heures de jour. Repères à Paris : sol horizontal ≈ 3,3 kWh/m²·jour sur l'année ;
+        façade sud dégagée ≈ 2,7, est ou ouest ≈ 2, nord ≈ 1. Il n'existe pas de seuil normatif.</li>
+      <li><b>Pic d'été</b> (W/m²) : irradiance horaire maximale de mai à septembre sur l'année type.</li>
     </ul>
     <h3>Masques</h3>
     <ul>

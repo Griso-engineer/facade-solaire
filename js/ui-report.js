@@ -59,11 +59,13 @@
       el('span', {}, 'TRACÉS · bureau d\'études structures et façades · ' + n + '/2'));
 
     // ----- page 1 -----
-    const mode = P.solar.color === 'none' ? 'annual' : P.solar.color;
+    // la vue 3D reprend la coloration choisie dans l'onglet Maquette 3D
+    FS.view3d.refresh();
     if (!snap) snap = FS.scene3d.snapshot(1200, 760);
     const view = P.view;
-    const viewTxt = 'Vue 3D : ' + FS.charts.MODES[mode].label.toLowerCase() + ', ombres du ' +
-      FS.solar.dateOfDoy(2026, view.doy).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', timeZone: 'UTC' }) + ' à ' + FS.solar.fmtHour(view.hour) + '.';
+    const viewTxt = 'Vue 3D : ' + FS.view3d.caption() + (FS.view3d.mode() === 'instant' ? ', ombres portées à cet instant.' : ', ombres du ' +
+      FS.solar.dateOfDoy(2026, view.doy).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', timeZone: 'UTC' }) + ' à ' + FS.solar.fmtHour(view.hour) + '.');
+    const legend3d = FS.view3d.legendNow();
     const mapBox = el('div', { class: 'sh-map' });
     const tbl = synthesisTable(R, ref, DL);
     const sheet1 = el('section', { class: 'sheet' },
@@ -71,7 +73,7 @@
       el('div', { class: 'sh-body' },
         el('div', { class: 'sh-left' },
           el('figure', { class: 'sh-3d' }, snap ? el('img', { src: snap, alt: 'Maquette 3D' }) : el('div', { class: 'muted' }, '3D indisponible'),
-            el('div', { class: 'sh-legend' }, FS.charts.legend(mode)), el('figcaption', {}, viewTxt)),
+            legend3d ? el('div', { class: 'sh-legend' }, legend3d) : null, el('figcaption', {}, viewTxt)),
           el('figure', { class: 'sh-mapfig' }, mapBox, el('figcaption', {}, 'Bâtiment étudié (corail), façades numérotées, voisins pris en compte dans un rayon de ' + P.radius + ' m.'))),
         el('div', { class: 'sh-right' },
           el('div', { class: 'sh-msgs' }, el('h3', {}, 'Messages clés'), el('ol', {}, msgs.map((m) => el('li', {}, m.text)))),

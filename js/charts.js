@@ -4,8 +4,8 @@
   'use strict';
   const S = FS.svg, el = FS.el;
 
-  // ---------- Échelle séquentielle (une teinte, clair → foncé) ----------
-  const RAMP = ['#fdebdc', '#fbd0b0', '#f6ab7c', '#ef844c', '#e0622a', '#bd4a1c', '#923712', '#66260c'];
+  // ---------- Échelle du rayonnement : bleu foncé (peu) → jaune → orange → corail #FB635F (beaucoup) ----------
+  const RAMP = ['#1b2a5e', '#2f5ea8', '#7fb0d6', '#f3e58a', '#f9c74f', '#f8961e', '#f9733f', '#fb635f'];
   function hexToRgb(h) { const n = parseInt(h.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; }
   // Lumière : seconde échelle séquentielle, en bleu (rampe de référence), pour ne pas la confondre avec le soleil
   const RAMP_SKY = ['#e6f0fd', '#cde2fb', '#9ec5f4', '#6da7ec', '#3987e5', '#256abf', '#184f95', '#0d366b'];
@@ -27,10 +27,11 @@
   };
   const colorFor = (mode, f) => colorAt(MODES[mode].get(f) / MODES[mode].max, MODES[mode].ramp);
 
-  function legend(mode) {
-    const m = MODES[mode];
+  function legend(mode) { return legendScale(MODES[mode]); }
+  // Légende d'une échelle quelconque : { label, unit, max, ramp, digits }
+  function legendScale(m) {
     const stops = (m.ramp === 'sky' ? RAMP_SKY : RAMP).map((c, i, a) => c + ' ' + Math.round(i / (a.length - 1) * 100) + '%').join(',');
-    const ticks = [0, 0.25, 0.5, 0.75, 1].map((t) => el('span', { style: { left: t * 100 + '%' } }, FS.fmt(t * m.max, 0)));
+    const ticks = [0, 0.25, 0.5, 0.75, 1].map((t) => el('span', { style: { left: t * 100 + '%' } }, FS.fmt(t * m.max, m.digits || 0)));
     return el('div', { class: 'scale-legend' },
       el('div', { class: 'scale-title' }, m.label + ' · ' + m.unit),
       el('div', { class: 'scale-bar', style: { background: 'linear-gradient(90deg,' + stops + ')' } }),
@@ -252,5 +253,5 @@
     return (r <= 1 ? 1 : r <= 2 ? 2 : r <= 2.5 ? 2.5 : r <= 5 ? 5 : 10) * p;
   }
 
-  FS.charts = { colorAt, colorFor, legend, rose, monthly, maskDiagram, groupBars, HEAT, COOL, MODES, RAMP };
+  FS.charts = { colorAt, colorFor, legend, legendScale, rose, monthly, maskDiagram, groupBars, HEAT, COOL, MODES, RAMP };
 })(window.FS);

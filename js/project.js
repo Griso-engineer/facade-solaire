@@ -22,6 +22,7 @@
       removed: [],             // identifiants des voisins retirés à la main (démolis…)
       steps: {},               // validation des étapes de l'onglet Site : { loc, target, nb, glazing } → 'ok' | 'changed'
       showWindows: true,
+      view3d: { mode: 'annual' }, // coloration des façades dans la maquette 3D (voir FS.view3d)
       view: { doy: FS.solar.doyOf(2026, 6, 21), hour: 15 },
       solar: { model: 'perez', split: 'erbs', albedo: 0.2, g: 0.6, color: 'annual', masks: true },
       climateInfo: null,       // source du climat utilisé (pour mémoire)
@@ -161,6 +162,8 @@
     p.thermal.protection = Object.assign(FS.thermal.defaults().protection, (s.thermal && s.thermal.protection) || {});
     p.steps = Object.assign({}, s.steps || {});
     p.drawn = s.drawn || [];
+    // ancienne coloration (P.solar.color) → onglet Maquette 3D
+    if (!s.view3d) p.view3d = { mode: s.solar && s.solar.color ? s.solar.color : 'annual' };
     // version 1 : cible OSM sans cours, voisins OSM
     if (p.target) {
       p.target.holes = p.target.holes || [];

@@ -315,7 +315,7 @@
     FS.showTip('Façade ' + f.id + ' · ' + FS.orientName[f.label] + ' (' + Math.round(f.az) + '°)\n' +
       FS.fmt(f.length, 1) + ' m × ' + FS.fmt(FS.project.derived().H - f.zMin, 1) + ' m = ' + FS.fmt(f.area, 0) + ' m²' +
       (f.pignon ? '\nHéberge au-dessus d\'un mitoyen' : '') +
-      (colors && FS.uiResults ? FS.uiResults.tipFor(f.id) : ''), ev.clientX, ev.clientY);
+      (colors && FS.view3d ? FS.view3d.tipFor(f.id) : ''), ev.clientX, ev.clientY);
   }
   function onClick(ev) { const f = pickAt(ev); if (f && onPick) onPick(f.id); }
 
