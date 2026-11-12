@@ -183,7 +183,7 @@
   function renderBanner() {
     const d = banner && banner.getContainer();
     if (!d) return;
-    d.textContent = mode === 'pick' && FS.project.get().target ? 'Bâtiment choisi (bleu). Cliquez un autre contour pour changer, ou dessinez l\'emprise.' : (MODE_TEXT[mode] || '');
+    d.textContent = mode === 'pick' && FS.project.get().target ? 'Bâtiment choisi (corail). Cliquez un autre contour pour changer, ou dessinez l\'emprise.' : (MODE_TEXT[mode] || '');
     d.hidden = !MODE_TEXT[mode];
     d.classList.toggle('drawing', !!draw);
   }

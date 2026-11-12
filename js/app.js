@@ -126,7 +126,7 @@
     <ul>
       <li><b>Emprises</b> : en France, BD TOPO de l'IGN (service WFS de la Géoplateforme), c'est-à-dire l'emprise
         cadastrale recalée de chaque bâtiment, cours intérieures comprises ; ailleurs, ou si l'IGN ne répond pas,
-        OpenStreetMap (Overpass). Tous les bâtiments de la vue sont dessinés en contour bleu et cliquables.
+        OpenStreetMap (Overpass). Tous les bâtiments de la vue sont dessinés en contour de couleur et cliquables.
         L'emprise peut aussi être dessinée à la main, avec une ou plusieurs cours intérieures.</li>
       <li><b>Hauteurs</b> : BD TOPO (attribut « hauteur », mesuré ; sinon altitude du toit moins altitude du sol ;
         sinon nombre d'étages × 3 m), ou OSM (<code>height</code>, sinon <code>building:levels</code> × 3 m) ; sans donnée,

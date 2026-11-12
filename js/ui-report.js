@@ -72,7 +72,7 @@
         el('div', { class: 'sh-left' },
           el('figure', { class: 'sh-3d' }, snap ? el('img', { src: snap, alt: 'Maquette 3D' }) : el('div', { class: 'muted' }, '3D indisponible'),
             el('div', { class: 'sh-legend' }, FS.charts.legend(mode)), el('figcaption', {}, viewTxt)),
-          el('figure', { class: 'sh-mapfig' }, mapBox, el('figcaption', {}, 'Bâtiment étudié (bleu), façades numérotées, voisins pris en compte dans un rayon de ' + P.radius + ' m.'))),
+          el('figure', { class: 'sh-mapfig' }, mapBox, el('figcaption', {}, 'Bâtiment étudié (corail), façades numérotées, voisins pris en compte dans un rayon de ' + P.radius + ' m.'))),
         el('div', { class: 'sh-right' },
           el('div', { class: 'sh-msgs' }, el('h3', {}, 'Messages clés'), el('ol', {}, msgs.map((m) => el('li', {}, m.text)))),
           el('div', { class: 'sh-table' }, el('h3', {}, 'Synthèse par façade'), tbl),
@@ -187,7 +187,7 @@
     tiles.addTo(map);
     L.control.scale({ imperial: false, position: 'bottomleft' }).addTo(map);
     for (const nb of FS.project.effectiveNeighbors(P)) L.polygon(nb.ll, { color: '#6e6d69', weight: 0.8, fillColor: '#6e6d69', fillOpacity: 0.3, interactive: false }).addTo(map);
-    L.polygon([P.target.ll].concat(P.target.holes || []), { color: '#4284f4', weight: 2, fillColor: '#4284f4', fillOpacity: 0.45, interactive: false }).addTo(map);
+    L.polygon([P.target.ll].concat(P.target.holes || []), { color: '#fb635f', weight: 2, fillColor: '#fb635f', fillOpacity: 0.45, interactive: false }).addTo(map);
     for (const f of D.model.facades) {
       const off = 3 + 0.3 * Math.sqrt(f.length);
       const m = D.proj.toLL(f.mid[0] + f.n[0] * off, f.mid[1] + f.n[1] * off);
