@@ -5,7 +5,7 @@
 
   function defaults() {
     return {
-      app: 'facade-solaire', version: 2,
+      app: 'insolatio', version: 2,
       name: '', address: '',
       tz: 'Europe/Paris',
       dataSource: 'auto',      // 'auto' (IGN en France, sinon OSM) | 'ign' | 'osm'
@@ -193,15 +193,16 @@
   function save() { FS.store.set('project', P); }
   function load() {
     const s = FS.store.get('project', null);
-    if (s && s.app === 'facade-solaire') P = merge(s);
+    if (s && (s.app === 'insolatio' || s.app === 'facade-solaire')) { P = merge(s); P.app = 'insolatio'; } // projets enregistrés sous l'ancien nom compris
     invalidate();
   }
   function reset() { P = defaults(); invalidate(); }
   function exportJSON() { return JSON.stringify(P, null, 1); }
   function importJSON(text) {
     const s = JSON.parse(text);
-    if (!s || s.app !== 'facade-solaire') throw new Error('Ce fichier n\'est pas un projet Façade solaire.');
+    if (!s || (s.app !== 'insolatio' && s.app !== 'facade-solaire')) throw new Error('Ce fichier n\'est pas un projet Insolatio.');
     P = merge(s);
+    P.app = 'insolatio';
     invalidate();
   }
 

@@ -56,7 +56,7 @@
       el('div', { class: 'sh-meta' }, el('b', {}, title), el('span', {}, shortAddr(P.address)), el('span', {}, date)));
     const foot = (n) => el('footer', { class: 'sh-foot' },
       el('span', {}, 'Ordres de grandeur pour la phase offre : ni simulation thermique dynamique, ni calcul réglementaire, ni étude d\'éclairement.'),
-      el('span', {}, 'TRACÉS · bureau d\'études structures et façades · ' + n + '/2'));
+      el('span', {}, 'TRACÉS · Insolatio · bureau d\'études structures et façades · ' + n + '/2'));
 
     // ----- page 1 -----
     // la vue 3D reprend la coloration choisie dans l'onglet Maquette 3D

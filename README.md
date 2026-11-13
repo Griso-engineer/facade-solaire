@@ -1,4 +1,6 @@
-# Façade solaire — Tracés
+# Insolatio — Tracés
+
+*Insolatio* : en latin, l'exposition au soleil.
 
 Analyse rapide des enjeux solaires et thermiques des façades d'un bâtiment existant ou projeté,
 pour la phase offre : en une dizaine de minutes, une lecture argumentée de l'exposition de chaque
@@ -8,7 +10,7 @@ façade, des masques, des apports et des ordres de grandeur des besoins.
 > Les résultats sont des ordres de grandeur pour cadrer les enjeux. Ils ne remplacent ni une
 > étude thermique, ni une étude d'éclairement, ni un calcul RE2020 / RT existant.
 
-**En ligne : https://griso-engineer.github.io/facade-solaire/**
+**En ligne : https://griso-engineer.github.io/insolatio/**
 
 ## Avancement
 
@@ -46,7 +48,7 @@ façade, des masques, des apports et des ordres de grandeur des besoins.
    marges, graphiques d'arrière-plan activés).
 
 Le projet s'enregistre dans le navigateur ; « Exporter » / « Importer » l'échangent en JSON. Un lien
-`…/facade-solaire/?lat=48.8358&lon=2.3745&r=150&nom=Mon%20projet` ouvre directement un bâtiment.
+`…/insolatio/?lat=48.8358&lon=2.3745&r=150&nom=Mon%20projet` ouvre directement un bâtiment.
 
 ## Fiche offre
 
@@ -160,7 +162,7 @@ fil des étapes : irradiation contre PVGIS, bilan thermique contre un calcul à 
   (albédo 0,2 réglable). Pas de réflexion par les façades voisines.
 - **Validation contre PVGIS 5.3** (SARAH3, 2005–2023, Paris, 90°, sans horizon) :
 
-  | Façade | Façade solaire | PVGIS | Écart |
+  | Façade | Insolatio | PVGIS | Écart |
   |---|---|---|---|
   | Sud | 977 kWh/m²·an | 1 016 | −3,9 % |
   | Est | 753 | 743 | +1,3 % |

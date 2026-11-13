@@ -310,7 +310,7 @@
     FS.$('#btn-export').addEventListener('click', () => {
       const P = FS.project.get();
       const nm = (P.name || 'projet').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase();
-      FS.download('facade-solaire-' + (nm || 'projet') + '.json', FS.project.exportJSON());
+      FS.download('insolatio-' + (nm || 'projet') + '.json', FS.project.exportJSON());
     });
     const file = FS.$('#file-import');
     FS.$('#btn-import').addEventListener('click', () => file.click());

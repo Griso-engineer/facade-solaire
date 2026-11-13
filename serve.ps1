@@ -1,4 +1,4 @@
-# Petit serveur statique local pour tester Façade solaire (aucune dépendance).
+# Petit serveur statique local pour tester Insolatio (aucune dépendance).
 # Usage : powershell -ExecutionPolicy Bypass -File serve.ps1 [-Port 8080] [-NoBrowser]
 # Si le port est déjà utilisé, le script essaie automatiquement les suivants.
 param([int]$Port = 8080, [switch]$NoBrowser)
