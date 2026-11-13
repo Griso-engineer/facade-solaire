@@ -49,7 +49,7 @@
   function tag(c) { return el('span', { class: 'risk ' + (c.key === 'bon' ? 'faible' : c.key === 'moyen' ? 'modere' : 'eleve') }, c.label); }
 
   function refresh() {
-    if (!ui.main) return;
+    if (!ui.main) { computeOnly(); return; } // onglet retiré : calcul seul (fiche offre, messages clés)
     const P = FS.project.get(), D = FS.project.derived(), T = P.thermal, Ls = L();
     ui.fields.forEach((f) => f.sync());
     const vi = Ls.variant != null && Ls.variant < T.variants.length ? Ls.variant : Math.min(T.ref, T.variants.length - 1);
@@ -121,6 +121,14 @@
     ui.main.append(el('div', { class: 'tbl-wrap' }, el('table', { class: 'tbl' },
       el('thead', {}, el('tr', {}, el('th', {}, 'Variante'), el('th', { class: 'num' }, 'TL'), el('th', { class: 'num' }, 'FLJm moyen'), el('th', { class: 'num' }, 'FLJm le plus faible (bas)'))),
       tbv)));
+  }
+
+  // VSC et FLJm sans affichage, avec la TL de la variante de référence
+  function computeOnly() {
+    const P = FS.project.get(), D = FS.project.derived(), R = FS.uiResults && FS.uiResults.get();
+    if (!D.ok || !R) { DL = null; return; }
+    const T = P.thermal, v = T.variants[Math.min(T.ref, T.variants.length - 1)];
+    DL = FS.daylight.compute(D, R.M, P.daylight, v ? v.TL : 0.78, T.frame, T.depth, P.floorH);
   }
 
   FS.uiDaylight = { build, refresh, get: () => DL };

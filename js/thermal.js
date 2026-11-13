@@ -78,16 +78,19 @@
       const Cm = (INERTIA[T.inertia] || INERTIA.moyenne) * Af;
       const Hve = 0.34 * (T.ach || 0) * V;        // W/K (ρc ≈ 0,34 Wh/m³K)
       // irradiation horaire : sommes mensuelles avec et sans protection, pic
-      const Imon = new Array(12).fill(0), IshMon = new Array(12).fill(0);
-      let peakFree = 0, peakSh = 0;
+      // irradiation sur la façade (opaque, activation des protections) et sur les vitrages
+      // (vitrage en tableau, masques compris ; à défaut, celle de la façade)
+      const Imon = new Array(12).fill(0), IshMon = new Array(12).fill(0), IopMon = new Array(12).fill(0);
+      let peakFree = 0;
       for (let h = 0; h < n; h++) {
-        const I = f.hourly[h];
-        if (I <= 0) continue;
+        const I = f.hourly[h], Ig = f.glassHourly ? f.glassHourly[h] : I;
+        if (I <= 0 && Ig <= 0) continue;
         const m = S.month[h];
-        Imon[m] += I / 1000;
+        IopMon[m] += I / 1000;
+        Imon[m] += Ig / 1000;
         const on = prot.mode !== 'none' && I > prot.threshold;
-        if (on) IshMon[m] += I / 1000;
-        if (m >= 4 && m <= 8) { if (I > peakFree) peakFree = I; }
+        if (on) IshMon[m] += Ig / 1000;
+        if (m >= 5 && m <= 7) { if (Ig > peakFree) peakFree = Ig; }
       }
       out.forEach((o) => {
         const v = o.variant;
@@ -101,7 +104,7 @@
           const hours = MDAYS[m] * 24;
           // vitrages : part sans protection au g nominal, part protégée au g réduit
           const QsolW = kw * ((Imon[m] - IshMon[m]) * v.g + IshMon[m] * gSh);
-          const QsolO = ALPHA * RSE * T.Up * Ao * Imon[m];
+          const QsolO = ALPHA * RSE * T.Up * Ao * IopMon[m];
           const Qint = T.qInt * Af * hours / 1000;
           const b = balanceMonth({ H, Cm, thetaE: tE[m], thetaH: T.tH, thetaC: T.tC, hours, Qsol: QsolW + QsolO, Qint });
           months.push(Object.assign({ QsolW, QsolO, Qint }, b));

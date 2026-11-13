@@ -29,6 +29,7 @@
   <script src="js/climate-paris.js"></script>
   <script src="js/irradiance.js"></script>
   <script src="js/masks.js"></script>
+  <script src="js/results.js"></script>
   <script src="js/instant.js"></script>
   <script src="js/thermal.js"></script>
   <script src="js/daylight.js"></script>
@@ -483,6 +484,35 @@
       const hz = new Float32Array(360).fill(30 * RAD);
       const vm = I.pointI(sk, [0, -1], { buried: false, hz, svf: 1, hb: 1 }, 0.2, true);
       near('Mur sud masqué : direct supprimé', vm, sk.dhi / 2 + 0.2 * sk.ghi / 2, 0.5, ' W/m²');
+    }
+
+    // ------------------------------------------------------------------
+    section('11. Vitrage par niveau, tableau, saisons');
+    {
+      const B = FS.building, RAD = Math.PI / 180;
+      // 6 niveaux de 3 m : RDC 80 %, étages 40 %, dernier étage 20 %
+      const lv = B.levels(18, 3, 0, { mid: 0.4, ground: 0.8, top: 0.2 });
+      check('Niveaux : 6, RDC puis étages puis dernier étage', lv.length === 6 && lv[0].wwr === 0.8 && lv[1].wwr === 0.4 && lv[5].wwr === 0.2, lv.map((l) => l.wwr).join(' / '));
+      const rects = B.windowsRows(20, lv);
+      const byLevel = lv.map((l) => rects.filter((r) => r.z0 >= l.z0 && r.z1 <= l.z1).reduce((a, r) => a + (r.u1 - r.u0) * 20 * (r.z1 - r.z0), 0) / (20 * 3));
+      check('Fenêtres : surface vitrée de chaque niveau = sa fraction vitrée', byLevel.every((a, i) => Math.abs(a - lv[i].wwr) < 0.01), byLevel.map((a) => FS.pct(a)).join(' / '));
+      const nbPer = lv.map((l) => rects.filter((r) => r.z0 >= l.z0 && r.z1 <= l.z1).length);
+      check('Fenêtres : même nombre de travées à chaque niveau (alignement vertical)', nbPer.every((x) => x === nbPer[0]), nbPer.join(' / '));
+      // Héberge (pied exposé à 9 m) : seuls les niveaux au-dessus comptent
+      check('Niveaux au-dessus d\'un mitoyen de 9 m : 3', B.levels(18, 3, 9, { mid: 0.4, ground: 0.8, top: 0.2 }).length === 3, '');
+      // Tableau : soleil de face → vitrage entièrement au soleil ; de biais → part réduite
+      near('Tableau : soleil dans l\'axe, horizontal → 100 % au soleil', B.revealSun(0.2, 1.2, 2.2, 0, 1, 0, 0, 1), 1, 1e-9);
+      const s45 = [Math.sin(45 * RAD), Math.cos(45 * RAD), 0];
+      near('Tableau de 20 cm, baie de 1,2 m, soleil à 45° : 1 − 0,2·tan 45° / 1,2', B.revealSun(0.2, 1.2, 2.2, s45[0], s45[1], 0, 0, 1), 1 - 0.2 / 1.2, 1e-9);
+      const h60 = [0, Math.cos(60 * RAD), Math.sin(60 * RAD)];
+      near('Tableau : soleil haut (60°) dans l\'axe → 1 − 0,2·tan 60° / 2,2', B.revealSun(0.2, 1.2, 2.2, h60[0], h60[1], h60[2], 0, 1), 1 - 0.2 * Math.tan(60 * RAD) / 2.2, 1e-9);
+      const f0 = B.revealDiffuse(0, 1.2, 2.2), f1 = B.revealDiffuse(0.2, 1.2, 2.2), f2 = B.revealDiffuse(0.4, 1.2, 2.2);
+      check('Tableau : part du diffus 1 sans retrait, décroissante avec la profondeur', f0 === 1 && f1 < 1 && f2 < f1 && f2 > 0.5, FS.fmtFixed(f1, 3) + ' (20 cm), ' + FS.fmtFixed(f2, 3) + ' (40 cm)');
+      // Saisons météorologiques : moyennes par jour
+      const d = FS.results.daily(new Array(12).fill(31));
+      near('Moyenne par jour, année : 12 × 31 / 365', d.annee, 372 / 365, 1e-9, ' kWh/m²·j');
+      near('Moyenne par jour, été : 3 × 31 / 92', d.ete, 93 / 92, 1e-9, ' kWh/m²·j');
+      near('Moyenne par jour, hiver : 3 × 31 / 90', d.hiver, 93 / 90, 1e-9, ' kWh/m²·j');
     }
 
     document.getElementById('title').textContent = nKo ? nKo + ' test(s) en échec sur ' + (nOk + nKo) : 'Tous les tests passent (' + nOk + ')';

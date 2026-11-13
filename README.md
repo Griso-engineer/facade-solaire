@@ -26,21 +26,23 @@ façade, des masques, des apports et des ordres de grandeur des besoins.
 1. **Site**, en quatre étapes à valider (le bouton passe au vert ; une modification ultérieure le
    repasse en orange « à revalider ») :
    1. *Localiser* : chercher l'adresse.
-   2. *Bâtiment étudié* : cliquer un contour bleu (tous les bâtiments de la vue sont cliquables) ou
-      dessiner l'emprise, puis ajouter les cours intérieures. Régler la hauteur : elle s'affiche sur la
-      carte au-dessus du bâtiment.
+   2. *Bâtiment étudié* : cliquer un contour (tous les bâtiments de la vue sont cliquables) ou dessiner
+      l'emprise, puis ajouter les cours intérieures. Régler la hauteur : elle s'affiche sur la carte.
    3. *Masques* : voisins lus automatiquement dans un rayon (avec leur hauteur IGN), ou dessinés à la
       main ; corriger d'un clic les hauteurs supposées (en orange), ajouter ou retirer des bâtiments.
-   4. *Vitrage* : fraction vitrée globale puis « OK » pour l'appliquer à toutes les façades ; ajuster
-      façade par façade dans le tableau. Les fenêtres sont dessinées en 3D.
-2. **Maquette 3D** : choisir la coloration des façades (éclairement à une date et une heure en W/m²,
-   heures au-dessus de 300 W/m² sur une journée, moyenne par jour en kWh/m²·jour, pic d'été, ciel
-   visible) ; une légende explique chaque mode avec ses repères. Choisir la vue, la date et l'heure qui serviront
-   à la fiche.
-3. **Exposition** : lire l'irradiation par façade, l'effet des masques et le diagramme de masque.
+   4. *Vitrage* : fraction vitrée des étages courants puis « OK » ; fractions du RDC et du dernier
+      étage ; profondeur de tableau (retrait du vitrage). Dans le tableau des façades : valeur propre
+      par façade, et case « Ignorer » pour sortir une façade des analyses (mur mitoyen…).
+2. **Maquette 3D** : trois familles de coloration, chacune avec ses seuls réglages :
+   *données instantanées* (pic d'été, date et heure en W/m², heures > 300 W/m² sur un jour),
+   *rayonnement moyen par période* (printemps, été, automne, hiver, en kWh/m²·jour), *autres*
+   (ciel visible, neutre). Les repères (ordres de grandeur, seuils) sont dessinés en haut à droite de
+   la vue. Fenêtres et tableaux sont dessinés en 3D.
+3. **Exposition** : situer le bâtiment (jauge des apports d'été par m² de plancher, équivalences en
+   radiateurs, part des déperditions d'hiver couverte par le soleil), puis le détail par façade et
+   par saison, le profil mensuel et le diagramme de masque sur 360°.
 4. **Thermique** : choisir 2 à 4 vitrages, la variante de référence et, si besoin, une protection solaire.
-5. **Lumière** : repérer les façades au VSC faible.
-6. **Fiche offre** : relire les messages clés, puis « Imprimer / enregistrer en PDF » (paysage, sans
+5. **Fiche offre** : relire les messages clés, puis « Imprimer / enregistrer en PDF » (paysage, sans
    marges, graphiques d'arrière-plan activés).
 
 Le projet s'enregistre dans le navigateur ; « Exporter » / « Importer » l'échangent en JSON. Un lien
@@ -111,7 +113,7 @@ fil des étapes : irradiation contre PVGIS, bilan thermique contre un calcul à 
 | `js/thermal.js` | Bilan mensuel quasi-stationnaire (ISO 13790), protections solaires, préréglages de vitrage |
 | `js/ui-thermal.js` | Onglet Thermique : hypothèses, variantes, comparaison |
 | `js/daylight.js` | VSC (BRE) et facteur de lumière du jour moyen (formule BRE simplifiée) |
-| `js/ui-daylight.js` | Onglet Lumière |
+| `js/ui-daylight.js` | Lumière naturelle (calcul pour la fiche offre ; l'onglet est retiré) |
 | `js/messages.js` | Messages clés générés à partir des résultats |
 | `js/ui-report.js` | Fiche offre : deux pages A4 paysage, impression PDF |
 | `js/app.js` | Interface, onglets, enchaînement |
@@ -179,6 +181,22 @@ Serveur local lancé, puis :
 ```
 
 et copier le contenu du bloc `<pre id="out">` dans `js/climate-paris.js`.
+
+## Hypothèses et limites : vitrage, saisons et repères
+
+- **Fraction vitrée par niveau** : étages courants (globale ou par façade), RDC et dernier étage
+  (globales, facultatives) ; les fenêtres 3D gardent le même nombre de travées à chaque niveau.
+- **Tableau** (20 cm par défaut) : part ensoleillée de la baie (1 − d·|tan γ|/l)·(1 − d·tan φ/h) pour
+  le direct, intégrée sur le demi-espace pour le diffus et le réfléchi ; il réduit les apports par les
+  vitrages, pas l'irradiation de la façade. Sur le cas test, 20 cm retirent ≈ 24 % des apports d'été.
+- **Façades ignorées** : obstacles pour les autres, hors des analyses.
+- **Saisons météorologiques** : printemps (mars–mai), été (juin–août), automne (sept.–nov.), hiver
+  (déc.–févr.) ; moyennes par jour, nuits comprises. Le pic d'été porte sur juin–août.
+- **Repères et seuils** (repères de conception, non normatifs) : 300 W/m² (fermeture usuelle d'une
+  protection mobile, NF EN ISO 13790) ; heures > 300 W/m² : < 1 h 30 brève, 1 h 30 à 2 h 30
+  prolongée, > 2 h 30 forte ; moyenne par jour : vigilance à 2,5 kWh/m²·jour en été et 3 en
+  mi-saison ; apports d'été par m² de plancher : < 25 W/m² faible (ordre des apports internes d'un
+  bureau), 25 à 50 modéré, > 50 élevé.
 
 ## Hypothèses et limites : masques
 

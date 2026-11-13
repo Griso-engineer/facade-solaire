@@ -122,7 +122,7 @@
     ui.targetInfo = el('div', { class: 'status' });
     ui.holeBtns = el('div', { class: 'row-actions', style: { marginTop: 0 } },
       el('button', { class: 'btn sm', onclick: () => { activeTo(2); FS.map.setMode('hole'); refresh(); } }, '+ Ajouter une cour intérieure'),
-      ui.clearHoles = el('button', { class: 'btn sm ghost', onclick: () => { P().target.holes = []; P().wwrOver = {}; FS.project.touch('target', 'glazing'); update('geom'); } }, 'Retirer les cours'),
+      ui.clearHoles = el('button', { class: 'btn sm ghost', onclick: () => { P().target.holes = []; P().wwrOver = {}; P().ignored = []; FS.project.touch('target', 'glazing'); update('geom'); } }, 'Retirer les cours'),
       el('button', { class: 'btn sm ghost', onclick: () => FS.map.fit() }, 'Recentrer'));
     const name = el('input', { type: 'text', placeholder: 'Nom du projet', value: P().name || '' });
     name.addEventListener('change', () => { P().name = name.value; FS.project.save(); });
@@ -169,10 +169,29 @@
     const wwr = el('input', { type: 'number', min: 0, max: 100, step: 5, value: Math.round(P().wwr * 100) });
     wwr.addEventListener('keydown', (e) => { if (e.key === 'Enter') applyGlobalWwr(); });
     ui.wwr = wwr;
+    // RDC et dernier étage : vide = comme les étages courants
+    const optPct = (label, key) => {
+      const inp = el('input', { type: 'number', min: 0, max: 100, step: 5, placeholder: 'comme les étages' });
+      inp.addEventListener('change', () => {
+        P()[key] = inp.value === '' ? null : FS.clamp(FS.num(inp.value, 0), 0, 100) / 100;
+        FS.project.touch('glazing'); update('glazing');
+      });
+      const f = el('label', { class: 'field' }, el('span', {}, label, el('small', {}, ' (%)')), inp);
+      f.sync = () => { if (document.activeElement !== inp) inp.value = P()[key] == null ? '' : Math.round(P()[key] * 100); };
+      return f;
+    };
+    ui.fG = optPct('Rez-de-chaussée', 'wwrGround');
+    ui.fT = optPct('Dernier étage', 'wwrTop');
+    ui.fRev = numField('Profondeur de tableau', () => P().reveal * 100, (v) => { P().reveal = FS.clamp(v, 0, 80) / 100; },
+      { min: 0, max: 80, step: 5, unit: 'cm, retrait du vitrage', kind: 'glazing', touch: ['glazing'] });
     const s4 = stepPanel(4, el('div', { class: 'grid-gap' },
-      el('label', { class: 'field' }, el('span', {}, 'Fraction vitrée globale', el('small', {}, ' (% de la surface de façade)')),
+      el('label', { class: 'field' }, el('span', {}, 'Fraction vitrée des étages courants', el('small', {}, ' (% de la surface de façade)')),
         el('div', { class: 'search' }, wwr, el('button', { class: 'btn primary', onclick: applyGlobalWwr }, 'OK : appliquer à toutes les façades'))),
       ui.wwrInfo = el('small', {}),
+      el('div', { class: 'grid2' }, ui.fG, ui.fT),
+      el('small', {}, 'Laisser vide pour reprendre la valeur des étages courants. Les façades aveugles (héberges, valeur nulle) le restent.'),
+      ui.fRev,
+      el('small', {}, 'Retrait du vitrage par rapport au nu de la façade : le tableau et le linteau ombrent le vitrage (apports solaires réduits). Haussmannien : 20 à 30 cm ; façade légère : 5 à 15 cm.'),
       el('label', { class: 'check' }, ui.showWin = el('input', {
         type: 'checkbox', checked: P().showWindows !== false,
         onchange: () => { P().showWindows = ui.showWin.checked; FS.project.save(); FS.scene3d.build(); }
@@ -246,7 +265,7 @@
     ui.chipsH.querySelectorAll('.chip').forEach((c) => c.classList.toggle('on', c.dataset.m === p.heightMode));
     ui.fLv.hidden = ui.fFh.hidden = p.heightMode !== 'levels';
     ui.fTot.hidden = p.heightMode !== 'total';
-    [ui.fLv, ui.fFh, ui.fTot, ui.fR, ui.fNfh, ui.fNdh].forEach((f) => f.sync());
+    [ui.fLv, ui.fFh, ui.fTot, ui.fR, ui.fNfh, ui.fNdh, ui.fG, ui.fT, ui.fRev].forEach((f) => f.sync());
     ui.hSrc.innerHTML = '';
     ui.hSrc.append('H = ' + FS.fmt(FS.project.height(p), 1) + ' m · ',
       FS.data.isHyp(p.heightSrc) ? el('span', { class: 'hyp' }, 'aucune donnée : hypothèse à vérifier') : (FS.data.SRC_LABEL[p.heightSrc] || ''));
@@ -310,14 +329,23 @@
     const m = D.model, tb = el('tbody');
     let sA = 0, sG = 0;
     for (const f of m.facades) {
-      const inp = el('input', { type: 'number', min: 0, max: 100, step: 5, value: Math.round(f.wwr * 100) });
+      // valeur des étages courants (le RDC et le dernier étage suivent les réglages globaux)
+      const inp = el('input', { type: 'number', min: 0, max: 100, step: 5, value: Math.round(f.wwrSet.mid * 100) });
       inp.addEventListener('change', () => {
-        const v = FS.clamp(FS.num(inp.value, f.wwr * 100), 0, 100) / 100;
+        const v = FS.clamp(FS.num(inp.value, f.wwrSet.mid * 100), 0, 100) / 100;
         if (Math.abs(v - (f.pignon ? 0 : p.wwr)) < 1e-6) delete p.wwrOver[f.id]; else p.wwrOver[f.id] = v;
         FS.project.touch('glazing'); update('glazing');
       });
-      sA += f.area; sG += f.glazed;
-      tb.append(el('tr', {},
+      const ign = el('input', {
+        type: 'checkbox', checked: f.ignored, title: 'Exclure cette façade des analyses (mur mitoyen, façade sans intérêt…)',
+        onchange: () => {
+          p.ignored = (p.ignored || []).filter((x) => x !== f.id);
+          if (ign.checked) p.ignored.push(f.id);
+          FS.project.touch('glazing'); update('glazing');
+        }
+      });
+      if (!f.ignored) { sA += f.area; sG += f.glazed; }
+      tb.append(el('tr', { class: f.ignored ? 'ignored' : '' },
         el('td', {}, el('b', {}, f.id)),
         el('td', {}, f.label, el('span', { class: 'muted' }, ' · ' + FS.orientName[f.label]), f.cour ? el('span', { class: 'badge' }, ' cour ' + f.cour) : null),
         el('td', { class: 'num' }, Math.round(f.az) + '°'),
@@ -327,20 +355,23 @@
         el('td', { class: 'num' }, inp, ' %', f.wwrOverridden ? el('button', {
           class: 'btn sm ghost', title: 'Revenir à la valeur globale', onclick: () => { delete p.wwrOver[f.id]; FS.project.touch('glazing'); update('glazing'); }
         }, '↺') : null),
-        el('td', { class: 'num' }, FS.fmt(f.glazed, 0)),
+        el('td', { class: 'num' }, FS.fmt(f.glazed, 0) + ' (' + FS.pct(f.wwr) + ')'),
         el('td', { style: { whiteSpace: 'nowrap' } }, f.pignon
           ? el('span', { class: 'mito', title: 'Mur au-dessus d\'un mitoyen de ' + FS.fmt(f.zMin, 1) + ' m, supposé aveugle' }, 'héberge (mitoyen ' + FS.fmt(f.zMin, 0) + ' m)')
-          : f.wwrOverridden ? el('span', { class: 'badge' }, 'valeur propre') : 'façade')));
+          : f.wwrOverridden ? el('span', { class: 'badge' }, 'valeur propre') : 'façade'),
+        el('td', { class: 'num' }, el('label', { class: 'check', style: { justifyContent: 'flex-end' } }, ign))));
     }
     ui.facTable.append(el('table', { class: 'tbl' },
       el('thead', {}, el('tr', {},
         el('th', {}, 'N°'), el('th', {}, 'Orientation'), el('th', { class: 'num' }, 'Azimut'), el('th', { class: 'num' }, 'Longueur (m)'),
-        el('th', { class: 'num' }, 'Hauteur exposée (m)'), el('th', { class: 'num' }, 'Surface (m²)'), el('th', { class: 'num' }, 'Fraction vitrée'),
-        el('th', { class: 'num' }, 'Vitrage (m²)'), el('th', {}, 'Type'))),
+        el('th', { class: 'num' }, 'Hauteur exposée (m)'), el('th', { class: 'num' }, 'Surface (m²)'), el('th', { class: 'num' }, 'Fraction vitrée étages'),
+        el('th', { class: 'num' }, 'Vitrage (m², moyenne)'), el('th', {}, 'Type'), el('th', { class: 'num' }, 'Ignorer'))),
       tb,
       el('tfoot', {}, el('tr', {},
-        el('td', { colspan: 5 }, el('b', {}, 'Total façades exposées')), el('td', { class: 'num' }, el('b', {}, FS.fmt(sA, 0))),
-        el('td', { class: 'num' }, FS.pct(sA ? sG / sA : 0)), el('td', { class: 'num' }, el('b', {}, FS.fmt(sG, 0))), el('td', {})))));
+        el('td', { colspan: 5 }, el('b', {}, 'Total façades analysées')), el('td', { class: 'num' }, el('b', {}, FS.fmt(sA, 0))),
+        el('td', {}), el('td', { class: 'num' }, el('b', {}, FS.fmt(sG, 0) + ' (' + FS.pct(sA ? sG / sA : 0) + ')')), el('td', {}), el('td', {})))));
+    ui.facTable.append(el('p', { class: 'status' }, 'Fraction vitrée des étages courants, par façade ; le RDC et le dernier étage suivent les réglages de l\'étape 4. ' +
+      'Une façade ignorée reste un obstacle pour les autres mais sort des analyses (exposition, thermique, fiche).'));
     const hidden = m.perimeter - m.facades.reduce((a, f) => a + f.length, 0);
     ui.facTable.append(el('p', { class: 'status', style: { marginTop: '8px' } },
       'Emprise ' + FS.fmt(m.footprintArea, 0) + ' m², périmètre ' + FS.fmt(m.perimeter, 0) + ' m' + (m.courts ? ' (cours comprises)' : '') +

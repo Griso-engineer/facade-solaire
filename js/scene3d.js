@@ -174,29 +174,43 @@
       ln.push(v3(s0.p0[0], s0.p0[1], s0.zMin), v3(s0.p0[0], s0.p0[1], H), v3(s1.p1[0], s1.p1[1], s1.zMin), v3(s1.p1[0], s1.p1[1], H));
       root.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(ln), edgeMat));
       addLabel(v3(f.mid[0] + f.n[0] * 1.5, f.mid[1] + f.n[1] * 1.5, (f.zMin + H) / 2),
-        f.id + ' · ' + f.label + (f.cour ? ' (cour)' : ''), f.pignon ? 'mito' : '', new THREE.Vector3(f.n[0], 0, -f.n[1]));
+        f.id + ' · ' + f.label + (f.cour ? ' (cour)' : '') + (f.ignored ? ' · ignorée' : ''), f.pignon || f.ignored ? 'mito' : '', new THREE.Vector3(f.n[0], 0, -f.n[1]));
     }
 
     // fenêtres théoriques (rythme parisien), à la fraction vitrée de chaque façade
-    const glass = [], frames = [];
+    // fractions vitrées par niveau (RDC, étages, dernier étage) ; le tableau est dessiné comme un
+    // retour de profondeur d autour de chaque baie : le vitrage paraît en retrait et reçoit son ombre
+    const glass = [], frames = [], reveals = [];
+    const dRev = FS.project.get().reveal || 0;
     for (const f of D.model.facades) {
-      if (f.pignon) continue;
+      if (f.pignon || f.ignored) continue;
       for (const s of f.segs) {
-        const rects = FS.building.windows(s.len, H - s.zMin, s.zMin, D.floorH || 3, f.wwr);
-        const o = 0.05; // légèrement devant le mur
-        const P = (u, z) => v3(s.p0[0] + (s.p1[0] - s.p0[0]) * u + s.n[0] * o, s.p0[1] + (s.p1[1] - s.p0[1]) * u + s.n[1] * o, z);
+        const rects = FS.building.windowsRows(s.len, FS.building.levels(H, D.floorH || 3, s.zMin, f.wwrSet));
+        const at = (u, z, o) => v3(s.p0[0] + (s.p1[0] - s.p0[0]) * u + s.n[0] * o, s.p0[1] + (s.p1[1] - s.p0[1]) * u + s.n[1] * o, z);
         for (const r of rects) {
-          const a0 = P(r.u0, r.z0), b0 = P(r.u1, r.z0), b1 = P(r.u1, r.z1), a1 = P(r.u0, r.z1);
+          const g0 = 0.03, o1 = 0.03 + dRev;
+          const a0 = at(r.u0, r.z0, g0), b0 = at(r.u1, r.z0, g0), b1 = at(r.u1, r.z1, g0), a1 = at(r.u0, r.z1, g0);
           glass.push(a0, b0, b1, a0, b1, a1);
-          frames.push(a0, b0, b0, b1, b1, a1, a1, a0);
+          if (dRev > 0.01) {
+            const A0 = at(r.u0, r.z0, o1), B0 = at(r.u1, r.z0, o1), B1 = at(r.u1, r.z1, o1), A1 = at(r.u0, r.z1, o1);
+            // quatre retours : appui, linteau, tableaux gauche et droit
+            reveals.push(a0, b0, B0, a0, B0, A0, a1, A1, B1, a1, B1, b1, a0, A0, A1, a0, A1, a1, b0, b1, B1, b0, B1, B0);
+            frames.push(A0, B0, B0, B1, B1, A1, A1, A0);
+          } else frames.push(a0, b0, b0, b1, b1, a1, a1, a0);
         }
       }
     }
     winGlass = new THREE.Mesh(new THREE.BufferGeometry().setFromPoints(glass),
       new THREE.MeshLambertMaterial({ color: 0x33414e, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2 }));
     winGlass.geometry.computeVertexNormals();
+    winGlass.receiveShadow = true;
+    const revMesh = new THREE.Mesh(new THREE.BufferGeometry().setFromPoints(reveals),
+      new THREE.MeshLambertMaterial({ color: new THREE.Color(css('--scene-target')), side: THREE.DoubleSide }));
+    revMesh.geometry.computeVertexNormals();
+    revMesh.castShadow = true; revMesh.receiveShadow = true;
     winFrames = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(frames),
       new THREE.LineBasicMaterial({ color: ink, transparent: true, opacity: 0.55 }));
+    winFrames.add(revMesh); // les tableaux s'affichent avec les cadres
     root.add(winGlass, winFrames);
 
     // soleil
@@ -212,8 +226,8 @@
   }
 
   function neutralColor(f) {
-    const base = new THREE.Color(f.pignon ? css('--scene-nb') : css('--accent'));
-    if (!f.pignon) base.lerp(new THREE.Color(css('--scene-target')), 0.45);
+    const base = new THREE.Color(f.pignon || f.ignored ? css('--scene-nb') : css('--accent'));
+    if (!f.pignon && !f.ignored) base.lerp(new THREE.Color(css('--scene-target')), 0.45);
     return base;
   }
 

@@ -157,8 +157,33 @@
     return { cs, facades, nPts, ms: performance.now() - t0 };
   }
 
+  /* Horizon des voisins dans toutes les directions (pour le diagramme sur 360°) : le bâtiment étudié
+     n'est pas compté, puisqu'il se trouve derrière la façade. */
+  function horizonAll(p, E) {
+    const hz = new Float32Array(NB);
+    const px = p[0], py = p[1], z = p[2];
+    for (const e of E) {
+      if (e.self || e.h <= z + 0.01) continue;
+      const ax = e.ax - px, ay = e.ay - py, bx = e.bx - px, by = e.by - py, ex = bx - ax, ey = by - ay;
+      const azA = (Math.atan2(ax, ay) / RAD + 360) % 360, azB = (Math.atan2(bx, by) / RAD + 360) % 360;
+      let span = azB - azA;
+      if (span > 180) span -= 360; else if (span < -180) span += 360;
+      const start = span >= 0 ? azA : azB, len = Math.abs(span);
+      for (let kk = Math.floor(start); kk <= Math.floor(start + len); kk++) {
+        const k = ((kk % NB) + NB) % NB, ang = (k + 0.5) * RAD, dx = Math.sin(ang), dy = Math.cos(ang);
+        const den = dx * ey - dy * ex;
+        let s = Math.abs(den) < 1e-12 ? 0 : (ax * dy - ay * dx) / den;
+        s = Math.max(0, Math.min(1, s));
+        const d = Math.max(0.05, Math.hypot(ax + ex * s, ay + ey * s));
+        const el = Math.atan((e.h - z) / d);
+        if (el > hz[k]) hz[k] = el;
+      }
+    }
+    return hz;
+  }
+
   // Élévation de l'horizon (rad) dans la direction az (°)
   const at = (hz, az) => hz[Math.floor(((az % 360) + 360) % 360)];
 
-  FS.masks = { cellSize, grid, points, obstacles, horizon, skyFactors, compute, at, NB };
+  FS.masks = { cellSize, grid, points, obstacles, horizon, horizonAll, skyFactors, compute, at, NB };
 })(window.FS);

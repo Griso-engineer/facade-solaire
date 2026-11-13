@@ -13,7 +13,10 @@
       heightMode: 'levels',    // 'levels' | 'total'
       levels: 5, floorH: 3, totalH: 15,
       heightSrc: 'default',    // voir FS.data.SRC_LABEL
-      wwr: 0.4, wwrOver: {},   // fraction vitrée globale, surcharges par n° de façade
+      wwr: 0.4, wwrOver: {},   // fraction vitrée des étages courants, surcharges par n° de façade
+      wwrGround: null, wwrTop: null, // fraction vitrée du RDC et du dernier étage (null : comme les étages courants)
+      reveal: 0.2,             // profondeur de tableau : retrait du vitrage par rapport au nu de la façade (m)
+      ignored: [],             // n° des façades exclues des analyses (murs mitoyens…)
       nbMode: 'auto',          // 'auto' : voisins lus dans un rayon (+ dessinés) ; 'manual' : voisins dessinés seulement
       radius: 150,
       nbDefaults: { floorH: 3, defaultH: 15 },
@@ -65,9 +68,21 @@
     const model = FS.building.facades({ xy: txy, holes, height: H }, nbs);
     model.facades.forEach((f) => {
       const o = p.wwrOver[f.id];
-      f.wwr = o != null ? o : (f.pignon ? 0 : p.wwr);
+      // fraction vitrée des étages courants, puis RDC et dernier étage (réglages globaux) ;
+      // une façade aveugle (héberge, ou valeur propre nulle) le reste à tous les niveaux
+      const mid = o != null ? o : (f.pignon ? 0 : p.wwr);
+      const blind = f.pignon || mid === 0;
+      f.wwrSet = {
+        mid,
+        ground: blind ? 0 : (p.wwrGround != null ? p.wwrGround : mid),
+        top: blind ? 0 : (p.wwrTop != null ? p.wwrTop : mid)
+      };
       f.wwrOverridden = o != null;
-      f.glazed = f.area * f.wwr;
+      f.ignored = (p.ignored || []).indexOf(f.id) >= 0;
+      let g = 0;
+      for (const s of f.segs) for (const l of FS.building.levels(H, p.floorH, s.zMin, f.wwrSet)) g += s.len * (l.z1 - l.z0) * l.wwr;
+      f.glazed = g;
+      f.wwr = f.area ? g / f.area : 0;
       f.opaque = f.area - f.glazed;
     });
     return { ok: true, proj, lat: lat0, lon: lon0, xy: txy, holes, rings: [txy].concat(holes), H, floorH: p.floorH, nbs, model };
@@ -87,6 +102,7 @@
   function setTarget(b) {
     P.target = { ll: b.ll, holes: b.holes || [], id: b.id || null, source: b.source || 'dessin', props: b.props, tags: pickTags(b.tags) };
     P.wwrOver = {};
+    P.ignored = []; // numérotation des façades nouvelle
     P.removed = [];
     if (b.source === 'dessin') {
       P.heightSrc = 'user';

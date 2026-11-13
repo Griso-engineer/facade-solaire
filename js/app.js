@@ -164,19 +164,34 @@
         2005–2023) : sud −4 %, est +1 %, ouest −3 %, nord +25 % (la façade nord ne reçoit que du diffus, où les modèles
         de ciel divergent le plus ; PVGIS utilise le modèle de Muneer). Détail dans <code>tests.html</code>.</li>
     </ul>
+    <h3>Vitrage : niveaux et tableau</h3>
+    <ul>
+      <li><b>Fraction vitrée par niveau</b> : étages courants (valeur globale ou propre à chaque façade), rez-de-chaussée et
+        dernier étage (réglages globaux, facultatifs). La surface vitrée de chaque façade est la somme des niveaux.</li>
+      <li><b>Profondeur de tableau</b> d (20 cm par défaut) : le vitrage est en retrait du nu de la façade. Pour le rayonnement
+        direct, la part ensoleillée de la baie vaut (1 − d·|tan γ|/l)·(1 − d·tan φ/h) (γ : angle horizontal entre le soleil et
+        la normale, φ : angle de profil, l × h : dimensions de la baie, tirées des fenêtres types) ; pour le diffus et le
+        réfléchi, cette part est intégrée sur le demi-espace vu par la baie. Le tableau ne réduit que les apports par les
+        vitrages, pas l'irradiation de la façade.</li>
+      <li><b>Façades ignorées</b> : elles restent des obstacles pour les autres façades, mais sortent des analyses
+        (exposition, thermique, fiche).</li>
+    </ul>
     <h3>Maquette 3D : coloration des façades</h3>
     <ul>
-      <li>Échelle commune au rayonnement : du bleu foncé (peu) au corail (beaucoup), en passant par le jaune et l'orange ;
-        bornes fixes pour comparer les projets entre eux. Une couleur par maille de calcul (≈ 2 m × 3 m).</li>
-      <li><b>À la date et à l'heure</b> (W/m²) : éclairement reçu à cet instant par ciel clair (modèle ASHRAE, enveloppe
-        haute d'une journée sans nuages), ombres des voisins comprises ; les ombres portées de la maquette suivent la date et l'heure.</li>
-      <li><b>Heures &gt; 300 W/m²</b> sur une journée : durée pendant laquelle chaque zone de façade dépasse 300 W/m², seuil
-        usuel de fermeture d'une protection solaire mobile (NF EN ISO 13790), par ciel clair, au pas de 10 minutes.</li>
-      <li><b>Moyenne par jour</b> (kWh/m²·jour) sur l'année, l'hiver (octobre à avril, 212 jours) ou l'été (mai à septembre,
-        153 jours) : énergie reçue sur la période, année type, divisée par le nombre de jours, nuits comprises. Ce n'est pas
-        une moyenne sur les seules heures de jour. Repères à Paris : sol horizontal ≈ 3,3 kWh/m²·jour sur l'année ;
-        façade sud dégagée ≈ 2,7, est ou ouest ≈ 2, nord ≈ 1. Il n'existe pas de seuil normatif.</li>
-      <li><b>Pic d'été</b> (W/m²) : irradiance horaire maximale de mai à septembre sur l'année type.</li>
+      <li>Échelle du rayonnement : du bleu foncé (peu) au corail (beaucoup), par le jaune et l'orange ; bornes fixes pour
+        comparer les projets. Une couleur par maille de calcul (≈ 2 m × 3 m). Les repères sont dessinés en haut à droite de la
+        vue, dans le même code couleur.</li>
+      <li><b>Données instantanées</b> : pic d'été (irradiance horaire maximale de juin à août, année type) ; éclairement à une
+        date et une heure (W/m², ciel clair ASHRAE, ombres des voisins comprises) ; heures au-dessus de 300 W/m² sur une
+        journée (ciel clair, pas de 10 minutes ; 300 W/m² : seuil usuel de fermeture d'une protection mobile, NF EN ISO 13790).
+        Repères : rose des façades dégagées (pic d'été et moyenne des heures de jour en été) ; barème des durées :
+        moins de 1 h 30 exposition brève, 1 h 30 à 2 h 30 exposition prolongée, plus de 2 h 30 forte exposition.</li>
+      <li><b>Rayonnement moyen par période</b> (kWh/m²·jour) : printemps (mars–mai), été (juin–août), automne (sept.–nov.),
+        hiver (déc.–févr.) ; énergie de la période divisée par son nombre de jours, nuits comprises. Repères : façades
+        dégagées des 8 orientations sur le climat du site, et seuil de vigilance : 2,5 en été, 3 en mi-saison (au-delà, une
+        façade vitrée demande une protection solaire) ; en hiver, 1,5 marque des apports utiles. Ces seuils sont des repères
+        de conception, pas des valeurs normatives.</li>
+      <li><b>Autres</b> : ciel visible (repères BRE : ≥ 27 % bon, 15 à 27 % moyen, &lt; 15 % difficile) ; neutre.</li>
     </ul>
     <h3>Masques</h3>
     <ul>
@@ -198,21 +213,22 @@
         300 voisins traités en environ 0,2 s.</li>
     </ul>
     <h3>Diagramme de masque</h3>
-    <p>Pour la façade sélectionnée, le diagramme montre en projection cylindrique la silhouette des obstacles vus d'un point
-    (bas, milieu ou haut de la façade) et les courses du soleil des 21 juin, 21 décembre et des équinoxes. Les points pleins
-    signalent les heures où le soleil est visible, les points creux celles où il est masqué.</p>
-    <h3>Indicateurs</h3>
+    <p>Pour la façade sélectionnée, le diagramme couvre tous les azimuts (0 à 360°). Deux traits verticaux bornent la moitié du
+    ciel vue par la façade ; au-delà (hachures), le soleil est derrière le mur. La silhouette grise montre les obstacles vus d'un
+    point (bas, milieu ou haut de la façade) ; les courses du soleil des 21 juin, 21 décembre et des équinoxes portent un point
+    par heure : plein si le soleil atteint la façade, creux s'il est masqué, gris s'il est derrière.</p>
+    <h3>Indicateurs de l'onglet Exposition</h3>
     <ul>
-      <li>Irradiation annuelle, d'hiver (octobre à avril) et d'été (mai à septembre), en kWh/m² de façade : moyenne des
-        segments de la façade pondérée par leur surface exposée.</li>
-      <li>Pic d'été : irradiance horaire maximale (W/m²) de mai à septembre sur l'année type.</li>
-      <li>Soleil direct : nombre d'heures où au moins la moitié de la façade est au soleil, avec un rayonnement direct
-        supérieur à 120 W/m² (seuil de l'OMM pour la durée d'insolation).</li>
-      <li>Masques : perte d'irradiation annuelle par rapport à la même façade sans aucun obstacle. Ciel vu : facteur de vue
-        du ciel moyen de la façade, rapporté à un mur dégagé.</li>
-      <li>Apports par les vitrages (onglet Exposition) : irradiation masquée × surface de baie × g de la variante de
-        référence, sans protection solaire ni menuiserie ; le pic d'apports est le maximum horaire en été (kW).</li>
-      <li>Les échelles de couleur ont des bornes fixes (1 000 kWh/m²·an, 800 W/m²…) pour comparer les projets entre eux.</li>
+      <li>Rayonnement reçu par saison, en moyenne par jour (kWh/m²·jour), moyenne des segments pondérée par leur surface.</li>
+      <li>Pic d'été : irradiance horaire maximale (W/m²) de juin à août sur l'année type.</li>
+      <li>Masques : perte de rayonnement annuel par rapport à la même façade sans obstacle.</li>
+      <li>Apports par les vitrages : rayonnement sur les vitrages (tableau et masques compris) × surface vitrée × g de la
+        variante de référence, sans protection solaire ; le pic d'apports est le maximum horaire en été (kW).</li>
+      <li><b>Positionnement</b> : pic d'apports d'été par m² de plancher derrière la façade la plus exposée et en moyenne, sur
+        une jauge (faible &lt; 25 W/m², modéré 25 à 50, élevé au-delà) avec des repères calculés sur le climat du site
+        (murs dégagés 40 % vitrés, nord, est, sud, ouest, et ouest avec store extérieur Fc 0,25). Équivalences : puissance
+        dans un bureau de 20 m² (en radiateurs de 1 000 W), apports d'été et d'hiver du bâtiment en kWh par jour, part des
+        déperditions d'hiver couverte par le soleil. 25 W/m² correspond aux apports internes d'un bureau (10 à 25 W/m²).</li>
     </ul>
     <h3>Bilan thermique</h3>
     <p class="note warn">Ordres de grandeur pour comparer des variantes et hiérarchiser les façades. Ni STD, ni calcul réglementaire :
@@ -316,7 +332,6 @@
     build3d();
     pages.resultats = FS.uiResults.build();
     pages.thermique = FS.uiThermal.build();
-    pages.lumiere = FS.uiDaylight.build();
     pages.fiche = FS.uiReport.build();
     buildMethod();
     wireProject();

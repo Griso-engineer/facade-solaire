@@ -199,26 +199,80 @@
      La surface vitrée dessinée vaut la fraction vitrée demandée (sauf plafonnement : vitrage ≤ 92 %
      de la travée et de l'étage). → [{ u0, u1, z0, z1 }] (u : abscisse relative sur le segment). */
   function windows(len, hTot, zMin, floorH, wwr) {
-    if (!(wwr > 0.005) || len < 1.2 || hTot < 1.5) return [];
-    const rows = Math.max(1, Math.round(hTot / floorH)), fh = hTot / rows;
-    let nb = Math.max(1, Math.round(len / 2.7)), ww = 0, hw = 0;
-    for (;;) {
-      const bay = len / nb, A = wwr * bay * fh;
-      hw = Math.min(0.72 * fh, 2.4); ww = A / hw;
-      if (ww > 0.8 * bay) { hw = Math.min(0.92 * fh, A / (0.8 * bay)); ww = Math.min(A / hw, 0.92 * bay); }
-      if (ww < 0.6 && nb > 1) { nb--; continue; }
-      break;
+    return windowsRows(len, levels(zMin + hTot, floorH, zMin, { mid: wwr, ground: wwr, top: wwr }));
+  }
+
+  /* Niveaux d'un segment de façade, du pied exposé (zMin) au sommet H, avec la fraction vitrée de
+     chaque niveau : RDC (niveau 0), dernier étage (niveau L − 1), étages courants.
+     w : { mid, ground, top }. → [{ z0, z1, wwr, k }] */
+  function levels(H, floorH, zMin, w) {
+    const L = Math.max(1, Math.round(H / floorH)), fh = H / L, out = [];
+    for (let k = 0; k < L; k++) {
+      const z1 = (k + 1) * fh;
+      if (z1 <= zMin + 1e-6) continue;
+      const z0 = Math.max(k * fh, zMin);
+      const wwr = L > 1 && k === 0 ? w.ground : L > 1 && k === L - 1 ? w.top : w.mid;
+      out.push({ z0, z1, wwr, k });
     }
-    const out = [];
-    for (let r = 0; r < rows; r++) {
-      const z0 = zMin + r * fh + (fh - hw) * 0.6, z1 = Math.min(z0 + hw, zMin + (r + 1) * fh - 0.02);
+    return out;
+  }
+
+  /* Fenêtres d'un segment niveau par niveau : même nombre de travées à tous les étages (alignement
+     vertical, comme sur une façade parisienne), largeur et hauteur ajustées à la fraction vitrée de
+     chaque niveau. → [{ u0, u1, z0, z1, ww, hw }] */
+  function windowsRows(len, lv) {
+    const used = lv.filter((l) => l.wwr > 0.005 && l.z1 - l.z0 > 1.5);
+    if (!used.length || len < 1.2) return [];
+    // nombre de travées : fixé par la fraction vitrée la plus fréquente
+    const ref = used.map((l) => l.wwr).sort((a, b) => a - b)[Math.floor(used.length / 2)];
+    const fhRef = used[Math.floor(used.length / 2)].z1 - used[Math.floor(used.length / 2)].z0;
+    let nb = Math.max(1, Math.round(len / 2.7));
+    while (nb > 1 && ref * (len / nb) * fhRef / Math.min(0.72 * fhRef, 2.4) < 0.6) nb--;
+    const bay = len / nb, out = [];
+    for (const l of used) {
+      const fh = l.z1 - l.z0, A = l.wwr * bay * fh;
+      let hw = Math.min(0.72 * fh, 2.4), ww = A / hw;
+      if (ww > 0.8 * bay) { hw = Math.min(0.92 * fh, A / (0.8 * bay)); ww = Math.min(A / hw, 0.92 * bay); }
+      const z0 = l.z0 + (fh - hw) * 0.6, z1 = Math.min(z0 + hw, l.z1 - 0.02);
       for (let b = 0; b < nb; b++) {
         const c = (b + 0.5) / nb, d = ww / 2 / len;
-        out.push({ u0: c - d, u1: c + d, z0, z1 });
+        out.push({ u0: c - d, u1: c + d, z0, z1, ww, hw: z1 - z0 });
       }
     }
     return out;
   }
 
-  FS.building = { facades, bbox, azOf, angDiff, windows };
+  /* Vitrage en retrait de d (m) dans un tableau de ww × hw (m).
+     Part ensoleillée du vitrage pour un soleil de vecteur (sx, sy, sz), mur de normale (nx, ny) :
+       f = (1 − d·|tan γ| / ww) · (1 − d·tan φ / hw)      γ : angle horizontal soleil-normale ;
+     φ : angle de profil (tan φ = tan h / cos γ) ; seuls le linteau et un tableau latéral portent ombre. */
+  function revealSun(d, ww, hw, sx, sy, sz, nx, ny) {
+    if (!(d > 0)) return 1;
+    const dot = sx * nx + sy * ny;
+    if (dot <= 1e-6) return 0;
+    const lat = Math.abs(sx * ny - sy * nx);
+    return Math.max(0, 1 - d * lat / (dot * ww)) * Math.max(0, 1 - d * Math.max(0, sz) / (dot * hw));
+  }
+  /* Part du rayonnement diffus (ciel isotrope, et sol par symétrie) qui atteint le vitrage :
+     intégrale de la part ensoleillée sur le demi-espace vu, pondérée par cos θ. */
+  const revCache = new Map();
+  function revealDiffuse(d, ww, hw) {
+    if (!(d > 0)) return 1;
+    const key = d.toFixed(3) + '|' + ww.toFixed(2) + '|' + hw.toFixed(2);
+    if (revCache.has(key)) return revCache.get(key);
+    let num = 0, den = 0;
+    const st = 2 * RAD;
+    for (let a = st / 2; a < Math.PI / 2; a += st) {
+      for (let g = -Math.PI / 2 + st / 2; g < Math.PI / 2; g += st) {
+        const sx = Math.cos(a) * Math.sin(g), sy = Math.cos(a) * Math.cos(g), sz = Math.sin(a);
+        const w = Math.cos(a) * Math.cos(g) * Math.cos(a); // cos θ · dΩ / (dα dγ)
+        num += w * revealSun(d, ww, hw, sx, sy, sz, 0, 1); den += w;
+      }
+    }
+    const v = num / den;
+    revCache.set(key, v);
+    return v;
+  }
+
+  FS.building = { facades, bbox, azOf, angDiff, windows, windowsRows, levels, revealSun, revealDiffuse };
 })(window.FS);

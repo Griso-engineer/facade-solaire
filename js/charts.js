@@ -23,7 +23,8 @@
     winter: { label: 'Hiver (oct.–avr.)', unit: 'kWh/m²', max: 500, get: (f) => f.winter },
     summer: { label: 'Été (mai–sept.)', unit: 'kWh/m²', max: 600, get: (f) => f.summer },
     peak: { label: 'Pic d\'été', unit: 'W/m²', max: 800, get: (f) => f.peak },
-    vsc: { label: 'Ciel visible (VSC)', unit: '%', max: 40, get: (f) => f.vsc * 100, ramp: 'sky' }
+    vsc: { label: 'Ciel visible (VSC)', unit: '%', max: 40, get: (f) => f.vsc * 100, ramp: 'sky' },
+    jour: { label: 'Moyenne par jour sur l\'année', unit: 'kWh/m²·jour', max: 4, digits: 1, get: (f) => f.daily.annee }
   };
   const colorFor = (mode, f) => colorAt(MODES[mode].get(f) / MODES[mode].max, MODES[mode].ramp);
 
@@ -95,20 +96,26 @@
   // ---------- Barres mensuelles ----------
   /* values[12] (façade sélectionnée), ref[12] (moyenne des façades, ligne grise) */
   function monthly(values, ref, opts = {}) {
-    const W = 560, H = 230, ml = 40, mr = 8, mt = 14, mb = 26;
+    const W = 560, H = 230, ml = 40, mr = opts.hLines ? 92 : 8, mt = 14, mb = 26;
     const iw = W - ml - mr, ih = H - mt - mb;
-    const vmax = Math.max(10, ...values, ...(ref || []));
-    const step = niceStep(vmax / 4);
-    const top = Math.ceil(vmax / step) * step;
+    const vmax = Math.max(opts.minTop || 10, ...values, ...(ref || []), ...(opts.hLines || []).map((l) => l.v));
+    const step = opts.step || niceStep(vmax / 4);
+    const top = Math.ceil(vmax / step - 1e-9) * step;
     const y = (v) => mt + ih - ih * v / top;
     const bw = iw / 12;
     const svg = S('svg', { viewBox: '0 0 ' + W + ' ' + H, class: 'chart bars', role: 'img', 'aria-label': opts.title || 'Irradiation mensuelle' });
-    // saisons : fond très léger pour l'été (mai–sept.)
-    svg.append(S('rect', { x: ml + 4 * bw, y: mt, width: 5 * bw, height: ih, class: 'season' }));
+    // saisons : fond très léger pour l'été (juin–août)
+    svg.append(S('rect', { x: ml + 5 * bw, y: mt, width: 3 * bw, height: ih, class: 'season' }));
     svg.append(S('text', { x: ml + 6.5 * bw, y: mt + 10, class: 'tick', 'text-anchor': 'middle' }, 'été'));
     for (let v = 0; v <= top + 1e-9; v += step) {
       svg.append(S('line', { x1: ml, x2: W - mr, y1: y(v), y2: y(v), class: v === 0 ? 'axis' : 'grid' }));
-      svg.append(S('text', { x: ml - 6, y: y(v) + 4, class: 'tick', 'text-anchor': 'end' }, FS.fmt(v, 0)));
+      svg.append(S('text', { x: ml - 6, y: y(v) + 4, class: 'tick', 'text-anchor': 'end' }, FS.fmt(v, opts.digits || 0)));
+    }
+    // repères horizontaux (seuils), étiquetés dans la marge droite
+    for (const l of opts.hLines || []) {
+      const x0 = l.from != null ? ml + l.from * bw : ml, x1 = l.to != null ? ml + (l.to + 1) * bw : W - mr;
+      svg.append(S('line', { x1: x0, x2: x1, y1: y(l.v), y2: y(l.v), class: 'refth' }));
+      svg.append(S('text', { x: W - mr + 4, y: y(l.v) + 4, class: 'tick' }, l.label));
     }
     values.forEach((v, i) => {
       const x = ml + i * bw + bw * 0.18, w = bw * 0.64, h = Math.max(0, y(0) - y(v));
@@ -199,6 +206,114 @@
     return svg;
   }
 
+  // ---------- Diagramme de masque sur 360° ----------
+  /* hzFront : horizon du point devant la façade (rad, −1 derrière) ; hzAll : horizon des voisins dans
+     toutes les directions ; az : azimut de la façade. La plage vue par la façade (az ± 90°) est
+     bornée par deux traits verticaux ; au-delà, le soleil n'atteint pas la façade (zone hachurée). */
+  function maskDiagram360(hzFront, hzAll, az, opts) {
+    const W = 640, H = 250, ml = 34, mr = 10, mt = 14, mb = 30;
+    const iw = W - ml - mr, ih = H - mt - mb, AMAX = 75;
+    const x = (a) => ml + (((a % 360) + 360) % 360) / 360 * iw;
+    const y = (alt) => mt + ih - ih * Math.min(alt, AMAX) / AMAX;
+    const svg = S('svg', { viewBox: '0 0 ' + W + ' ' + H, class: 'chart maskd', role: 'img', 'aria-label': 'Diagramme de masque solaire sur 360°' });
+    const defs = S('defs', {}, S('pattern', { id: 'hatch-behind', width: 6, height: 6, patternUnits: 'userSpaceOnUse', patternTransform: 'rotate(45)' },
+      S('line', { x1: 0, y1: 0, x2: 0, y2: 6, class: 'hatch' })));
+    svg.append(defs);
+    // zone derrière la façade (hachurée), éventuellement en deux morceaux autour de 0°/360°
+    const a0 = ((az - 90) % 360 + 360) % 360, a1 = ((az + 90) % 360 + 360) % 360;
+    const behind = a0 < a1 ? [[0, a0], [a1, 360]] : [[a1, a0]];
+    const xr = (a) => ml + a / 360 * iw; // sans repli à 360°
+    for (const [b0, b1] of behind) if (b1 > b0) svg.append(S('rect', { x: xr(b0), y: mt, width: xr(b1) - xr(b0), height: ih, fill: 'url(#hatch-behind)', class: 'behind' }));
+    for (let alt = 0; alt <= AMAX; alt += 15) {
+      svg.append(S('line', { x1: ml, x2: W - mr, y1: y(alt), y2: y(alt), class: alt ? 'grid' : 'axis' }));
+      svg.append(S('text', { x: ml - 5, y: y(alt) + 4, class: 'tick', 'text-anchor': 'end' }, alt + '°'));
+    }
+    for (let a = 0; a <= 360; a += 45) {
+      svg.append(S('line', { x1: ml + a / 360 * iw, x2: ml + a / 360 * iw, y1: mt, y2: mt + ih, class: 'grid' }));
+      svg.append(S('text', { x: ml + a / 360 * iw, y: H - 10, class: a % 90 ? 'tick' : 'card', 'text-anchor': a === 0 ? 'start' : a === 360 ? 'end' : 'middle' }, FS.orientLabel(a % 360) + (a % 90 ? '' : ' ' + a + '°')));
+    }
+    // silhouette des obstacles : devant la façade, horizon complet du point ; ailleurs, voisins seuls
+    let d = 'M' + ml + ',' + y(0);
+    for (let k = 0; k <= 360; k++) {
+      const kk = k % 360;
+      const front = hzFront[kk] >= 0;
+      const e = Math.max(0, front ? hzFront[kk] : hzAll[kk]) / Math.PI * 180;
+      d += 'L' + (ml + k / 360 * iw).toFixed(1) + ',' + y(e).toFixed(1);
+    }
+    d += 'L' + (W - mr) + ',' + y(0) + 'Z';
+    svg.append(S('path', { d, class: 'maskfill' }));
+    // bornes de la plage vue par la façade
+    for (const b of [az - 90, az + 90]) svg.append(S('line', { x1: x(b), x2: x(b), y1: mt, y2: mt + ih, class: 'facebound' }));
+    svg.append(S('text', { x: x(az), y: mt + 11, class: 'lab', 'text-anchor': 'middle' }, 'vu par la façade (' + Math.round(((az - 90) % 360 + 360) % 360) + '° → ' + Math.round((az + 90) % 360) + '°)'));
+    // courses du soleil (toute la journée)
+    for (const [lab, m, dd] of [['21 juin', 6, 21], ['équinoxes', 3, 20], ['21 déc.', 12, 21]]) {
+      const doy = FS.solar.doyOf(2026, m, dd);
+      let path = '', prevX = null, best = null;
+      for (let t = 3; t <= 23; t += 1 / 6) {
+        const p = FS.solar.position(FS.solar.localToUTC(2026, doy, t, opts.tz), opts.lat, opts.lon);
+        if (p.altitude <= 0) { prevX = null; continue; }
+        const X = x(p.azimuth);
+        path += (prevX === null || Math.abs(X - prevX) > iw / 2 ? 'M' : 'L') + X.toFixed(1) + ',' + y(p.altitude).toFixed(1);
+        prevX = X;
+        if (!best || p.altitude > best.altitude) best = p;
+        if (Math.abs(t - Math.round(t)) < 0.01) {
+          const rel = ((p.azimuth - az + 540) % 360) - 180;
+          const front = Math.abs(rel) < 90;
+          const vis = front && p.altitude * Math.PI / 180 > Math.max(0, hzFront[Math.floor(p.azimuth) % 360]);
+          svg.append(S('circle', { cx: X, cy: y(p.altitude), r: 3.2, class: vis ? 'sundot' : front ? 'sundot off' : 'sundot behind' }));
+          if (m === 6 && Math.round(t) % 2 === 0) svg.append(S('text', { x: X, y: y(p.altitude) - 7, class: 'tick', 'text-anchor': 'middle' }, Math.round(t) + ' h'));
+        }
+      }
+      svg.insertBefore(S('path', { d: path, class: 'sunpath' }), svg.querySelector('.sundot'));
+      if (best) svg.append(S('text', { x: x(best.azimuth), y: y(best.altitude) - (m === 6 ? 18 : 8), class: 'lab', 'text-anchor': 'middle' }, lab));
+    }
+    return svg;
+  }
+
+  // ---------- Jauge horizontale avec zones, marqueurs de référence et du projet ----------
+  /* zones : [{ to, label, color }] ; refs : [{ v, label }] (dessous) ; marks : [{ v, label, strong }] (dessus) */
+  function gauge(max, zones, refs, marks, unit) {
+    const W = 640, H = 150, ml = 12, mr = 12, by = 70, bh = 16;
+    const iw = W - ml - mr, x = (v) => ml + iw * Math.min(1, Math.max(0, v / max));
+    const svg = S('svg', { viewBox: '0 0 ' + W + ' ' + H, class: 'chart gauge', role: 'img' });
+    let from = 0;
+    for (const z of zones) {
+      svg.append(S('rect', { x: x(from), y: by, width: x(z.to) - x(from), height: bh, fill: z.color }));
+      svg.append(S('text', { x: (x(from) + x(z.to)) / 2, y: by + bh / 2 + 4, class: 'zone', 'text-anchor': 'middle' }, z.label));
+      from = z.to;
+    }
+    const tstep = max <= 150 ? 25 : max <= 300 ? 50 : max / 4;
+    for (let v = 0; v <= max + 1e-9; v += tstep) svg.append(S('text', { x: x(v), y: by + bh + 13, class: 'tick', 'text-anchor': v === 0 ? 'start' : v >= max ? 'end' : 'middle' }, FS.fmt(v, 0) + (v >= max ? ' ' + unit : '')));
+    // références (dessous, sur deux rangées pour éviter les chevauchements)
+    refs.slice().sort((a, b) => a.v - b.v).forEach((r, i) => {
+      const X = x(r.v), row = i % 2;
+      svg.append(S('line', { x1: X, x2: X, y1: by + bh, y2: by + bh + 22 + row * 14, class: 'refmark' }));
+      svg.append(S('text', { x: X, y: by + bh + 32 + row * 14, class: 'tick', 'text-anchor': 'middle' }, r.label));
+    });
+    // projet (dessus)
+    marks.forEach((m, i) => {
+      const X = x(m.v), yy = by - 8 - i * 24;
+      svg.append(S('path', { d: 'M' + X + ',' + (by - 1) + 'l-6,-9h12z', class: m.strong ? 'markp strong' : 'markp' }));
+      svg.append(S('line', { x1: X, x2: X, y1: by - 10, y2: yy - 4, class: 'refmark' }));
+      svg.append(S('text', { x: Math.min(W - mr, Math.max(ml, X)), y: yy - 7, class: m.strong ? 'lab' : 'tick', 'text-anchor': X > W * 0.75 ? 'end' : X < W * 0.25 ? 'start' : 'middle' }, m.label));
+    });
+    return svg;
+  }
+
+  // Pictogrammes de radiateurs (équivalence de puissance)
+  function radiators(n, max = 10) {
+    const k = Math.min(max, Math.max(0, n));
+    const full = Math.floor(k), half = k - full >= 0.5;
+    const W = 26, svg = S('svg', { viewBox: '0 0 ' + (W * Math.max(1, Math.ceil(k)) + 4) + ' 26', class: 'radiators', role: 'img' });
+    for (let i = 0; i < full + (half ? 1 : 0); i++) {
+      const g = S('g', { transform: 'translate(' + (2 + i * W) + ',2)', opacity: i === full ? 0.45 : 1 });
+      for (let j = 0; j < 4; j++) g.append(S('rect', { x: j * 5.5, y: 2, width: 4, height: 18, rx: 1.5, class: 'rad' }));
+      g.append(S('rect', { x: -1, y: 18, width: 23, height: 2.5, class: 'rad' }));
+      svg.append(g);
+    }
+    return svg;
+  }
+
   // ---------- Barres groupées (ex. chauffage / froid par variante ou par mois) ----------
   /* cats : libellés ; series : [{ name, color, values }] ; opts : { unit, labels (valeurs sur les barres), title } */
   function groupBars(cats, series, opts = {}) {
@@ -253,5 +368,5 @@
     return (r <= 1 ? 1 : r <= 2 ? 2 : r <= 2.5 ? 2.5 : r <= 5 ? 5 : 10) * p;
   }
 
-  FS.charts = { colorAt, colorFor, legend, legendScale, rose, monthly, maskDiagram, groupBars, HEAT, COOL, MODES, RAMP };
+  FS.charts = { colorAt, colorFor, legend, legendScale, rose, monthly, maskDiagram, maskDiagram360, gauge, radiators, groupBars, HEAT, COOL, MODES, RAMP };
 })(window.FS);

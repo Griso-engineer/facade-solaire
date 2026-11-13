@@ -435,3 +435,43 @@ table.sh-tbl th, table.sh-tbl td { padding: 0.9mm 1.1mm; }
 .legend-note p + p { color: var(--muted); }
 table.tbl.compact { font-size: 12.5px; }
 table.tbl.compact td, table.tbl.compact th { padding: 3px 6px; }
+
+/* ---------- Exposition : masque 360°, jauge, équivalences ---------- */
+.chart .hatch { stroke: var(--faint); stroke-width: 1.2; }
+.chart .facebound { stroke: var(--ink); stroke-width: 1.5; stroke-dasharray: 5 3; }
+.chart .sundot.behind { fill: var(--paper); stroke: var(--faint); stroke-width: 1.2; }
+.chart .zone { font-size: 10.5px; font-weight: 700; fill: #111110; }
+.chart .refmark { stroke: var(--ink-2); stroke-width: 1; }
+.chart .markp { fill: var(--ink-2); }
+.chart .markp.strong { fill: var(--ink); }
+.radiators { height: 26px; width: auto; max-width: 100%; display: block; }
+.radiators .rad { fill: var(--ink-2); }
+.bench { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; border-top: 1px solid var(--rule); margin: 6px 0 22px; }
+.bench > div { padding: 12px 14px 12px 0; display: grid; gap: 6px; align-content: start; }
+.bench > div + div { border-left: 1px solid var(--line); padding-left: 14px; }
+.bench b.big { font-size: clamp(22px, 2.3vw, 30px); font-weight: 900; letter-spacing: -0.03em; line-height: 1; }
+.bench span { font-size: 12.5px; color: var(--muted); }
+.fac-chips { margin: 10px 0 4px; }
+.fac-chips .chip.on { background: var(--accent); border-color: var(--accent); color: #111110; }
+.climate-line { font-size: 12.5px; color: var(--muted); margin: -10px 0 14px; }
+@media (max-width: 900px) { .bench { grid-template-columns: minmax(0, 1fr); } .bench > div + div { border-left: 0; padding-left: 0; border-top: 1px solid var(--line); } }
+
+/* Maquette 3D : familles de coloration et repères graphiques */
+.seg3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid var(--rule); }
+.seg3 .seg { border: 0; background: var(--paper); padding: 9px 8px; font-size: 12.5px; font-weight: 800; cursor: pointer; line-height: 1.2; }
+.seg3 .seg + .seg { border-left: 1px solid var(--rule); }
+.seg3 .seg:hover { background: var(--paper-2); }
+.seg3 .seg.on { background: var(--ink); color: var(--paper); }
+.ref3d { position: absolute; top: 10px; right: 10px; z-index: 5; background: var(--paper); border: 1px solid var(--rule); padding: 8px 10px; width: 270px; display: grid; gap: 4px; }
+.ref3d .ref-title { font-size: 11.5px; font-weight: 800; }
+.ref3d .ref-key { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 10.5px; color: var(--muted); }
+.ref3d .ref-key span::before { content: ""; display: inline-block; width: 12px; height: 9px; margin-right: 4px; vertical-align: -1px; }
+.ref3d .k-out::before { border: 2px solid var(--c-orange); }
+.ref3d .k-in::before { background: var(--c-orange); }
+.ref3d .k-dot::before { width: 8px !important; height: 8px !important; border-radius: 50%; background: var(--ink); }
+.chart.refsvg { width: 100%; height: auto; }
+.chart.refsvg.rose { max-width: 220px; justify-self: center; }
+.chart .projdot { fill: var(--ink); stroke: var(--paper); stroke-width: 1.5; }
+@media (max-width: 680px) { .ref3d { width: 200px; } }
+table.tbl tr.ignored td { color: var(--faint); } table.tbl tr.ignored td b { color: var(--faint); }
+.ref3d .k-line::before { height: 0 !important; border-top: 1.5px dashed var(--ink-2); vertical-align: 3px !important; }

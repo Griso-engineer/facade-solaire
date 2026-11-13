@@ -66,7 +66,7 @@
       const W = R.reduce((a, r) => a + r.w, 0) || 1;
       const mean = (k) => R.reduce((a, r) => a + r[k] * r.w, 0) / W;
       return {
-        id: f.id, label: f.label, az: f.az, wwr: f.wwr, pignon: f.pignon, rows: R,
+        id: f.id, label: f.label, az: f.az, wwr: f.wwr, pignon: f.pignon || f.ignored, ignored: f.ignored, rows: R,
         vsc: mean('vsc'), adf: mean('adf'), theta: mean('theta'),
         low: R[0] || null, high: R[R.length - 1] || null
       };

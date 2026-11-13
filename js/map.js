@@ -232,7 +232,7 @@
       const c = FS.geo.centroid(ll.map((q) => proj.toXY(q[0], q[1])));
       if (!FS.geo.inside(c, outer)) { setStatus('La cour doit être dessinée à l\'intérieur de l\'emprise.', true); mode = 'pick'; renderBanner(); return; }
       P.target.holes = (P.target.holes || []).concat([ll]);
-      P.wwrOver = {};
+      P.wwrOver = {}; P.ignored = [];
       FS.project.invalidate();
       mode = 'pick';
       renderBanner();

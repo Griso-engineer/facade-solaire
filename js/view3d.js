@@ -1,83 +1,54 @@
-/* Onglet Maquette 3D : coloration des façades (élément principal du panneau) et légendes.
+/* Onglet Maquette 3D : coloration des façades et repères graphiques.
 
-   Modes :
-     instant  éclairement (W/m²) à la date et à l'heure choisies, ciel clair, masques compris ;
-     hours    nombre d'heures au-dessus de 300 W/m² sur la journée choisie, ciel clair ;
-     annual / winter / summer
-              énergie reçue en moyenne par jour (kWh/m²·jour), année type : énergie de la période
-              divisée par son nombre de jours, nuits comprises ;
-     peak     pic horaire d'été (W/m²), année type ;
-     vsc      ciel visible (VSC, lumière naturelle) ;
-     none     façades neutres.
-   La date et l'heure (et donc les ombres portées) sont une sous-option des deux premiers modes. */
+   Trois familles (boutons), chacune avec ses seuls paramètres :
+     Données instantanées : pic d'été (W/m², année type) ; à la date et l'heure choisies (W/m², ciel
+       clair) ; heures au-dessus de 300 W/m² sur une journée (ciel clair).
+     Rayonnement moyen par période : printemps, été, automne, hiver (kWh/m²·jour, année type, nuits comprises).
+     Autres : ciel visible (VSC), neutre.
+   Les repères (ordres de grandeur, seuils) sont dessinés en haut à droite de la vue 3D, dans le
+   même code couleur que la légende en bas à gauche. */
 (function (FS) {
   'use strict';
-  const el = FS.el;
+  const el = FS.el, S = FS.svg;
   let ui = {}, field = null, fieldKey = null;
-  const DAYS = { annual: 365, winter: 212, summer: 153 }; // oct.–avr. : 212 j ; mai–sept. : 153 j
+  const CATS = {
+    inst: { label: 'Données instantanées', modes: [['peak', 'Pic d\'été'], ['instant', 'Date et heure'], ['hours', 'Heures > 300 W/m² sur un jour']] },
+    period: { label: 'Rayonnement moyen par période', modes: [['printemps', 'Printemps'], ['ete', 'Été'], ['automne', 'Automne'], ['hiver', 'Hiver']] },
+    other: { label: 'Autres données', modes: [['vsc', 'Ciel visible'], ['none', 'Neutre']] }
+  };
+  const PERIOD_TXT = { printemps: 'printemps (mars–mai)', ete: 'été (juin–août)', automne: 'automne (sept.–nov.)', hiver: 'hiver (déc.–févr.)' };
+  const OLD = { annual: 'ete', summer: 'ete', winter: 'hiver' };
 
   const P = () => FS.project.get();
-  const mode = () => (P().view3d && P().view3d.mode) || 'annual';
+  function mode() {
+    const m = (P().view3d && P().view3d.mode) || 'ete';
+    return OLD[m] || m;
+  }
+  const catOf = (m) => Object.keys(CATS).find((c) => CATS[c].modes.some((x) => x[0] === m)) || 'period';
 
   // Échelles (bornes fixes, pour comparer les projets entre eux)
   function scale(m) {
     const v = P().view;
     const date = FS.solar.dateOfDoy(2026, v.doy).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', timeZone: 'UTC' });
+    if (PERIOD_TXT[m]) return { label: 'Moyenne par jour, ' + PERIOD_TXT[m], unit: 'kWh/m²·jour', max: 4, digits: 1, get: (x) => (x.d || x.daily)[m] };
     switch (m) {
-      case 'instant': return { label: 'Éclairement le ' + date + ' à ' + FS.solar.fmtHour(v.hour), unit: 'W/m²', max: 900 };
-      case 'hours': return { label: 'Heures > 300 W/m² le ' + date, unit: 'h', max: 10 };
-      case 'annual': return { label: 'Moyenne journalière sur l\'année', unit: 'kWh/m²·jour', max: 4, digits: 1, get: (x) => x.annual / DAYS.annual };
-      case 'winter': return { label: 'Moyenne journalière d\'oct. à avr.', unit: 'kWh/m²·jour', max: 4, digits: 1, get: (x) => x.winter / DAYS.winter };
-      case 'summer': return { label: 'Moyenne journalière de mai à sept.', unit: 'kWh/m²·jour', max: 4, digits: 1, get: (x) => x.summer / DAYS.summer };
-      case 'peak': return { label: 'Pic horaire d\'été (année type)', unit: 'W/m²', max: 900, get: (x) => x.peak };
+      case 'instant': return { label: 'Éclairement le ' + date + ' à ' + FS.solar.fmtHour(v.hour) + ', ciel clair', unit: 'W/m²', max: 900 };
+      case 'hours': return { label: 'Heures > 300 W/m² le ' + date + ', ciel clair', unit: 'h', max: 5, digits: 1 };
+      case 'peak': return { label: 'Pic horaire d\'été (juin–août, année type)', unit: 'W/m²', max: 900, get: (x) => x.peak };
       case 'vsc': return { label: 'Ciel visible (VSC)', unit: '%', max: 40, ramp: 'sky', get: (x) => x.vsc * 100 };
       default: return null;
     }
   }
 
-  // Texte explicatif sous la légende : ce que représente la valeur, ordres de grandeur, seuils usuels
-  function note(m) {
-    const c = FS.climate.get();
-    let ghi = null;
-    if (c) {
-      const g = c.monthly.ghiTMY, sum = (ix) => ix.reduce((a, i) => a + g[i], 0);
-      ghi = { annual: sum([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]) / 365, winter: sum([9, 10, 11, 0, 1, 2, 3]) / 212, summer: sum([4, 5, 6, 7, 8]) / 153 };
-    }
-    switch (m) {
-      case 'instant': return [
-        'Rayonnement reçu à cet instant par ciel clair (modèle ASHRAE), ombres des voisins comprises. Changez la date et l\'heure ci-dessous : les ombres portées suivent.',
-        'Repères : façade dans l\'ombre (diffus seul) 50 à 150 W/m² ; au-delà de 300 W/m², seuil usuel de fermeture d\'une protection solaire mobile (NF EN ISO 13790) ; façade face au soleil 600 à 850 W/m².'];
-      case 'hours': return [
-        'Nombre d\'heures de la journée où chaque zone de façade reçoit plus de 300 W/m² (ciel clair, pas de 10 min, masques compris).',
-        'Repères indicatifs : moins de 2 h, exposition brève ; 2 à 4 h, matinée ou après-midi au soleil ; plus de 5 h, exposition prolongée où une protection solaire mobile se justifie en général.'];
-      case 'annual': case 'winter': case 'summer': return [
-        'Énergie reçue sur la période divisée par le nombre de jours (nuits comprises) : c\'est une moyenne par jour, comparable d\'une saison à l\'autre. Année type, masques compris.',
-        'Repères' + (ghi ? ' sur ce site : sol horizontal dégagé ' + FS.fmtFixed(ghi[m], 1) + ' kWh/m²·jour' : '') + ' ; à Paris, façade sud dégagée ≈ 2,7 sur l\'année (≈ 3 l\'été, ≈ 2,5 l\'hiver), est ou ouest ≈ 2, nord ≈ 1. ' +
-        'Il n\'y a pas de seuil normatif : l\'été, au-delà de ≈ 3 kWh/m²·jour sur une façade très vitrée, les apports deviennent importants ; l\'hiver, ce sont des apports gratuits.'];
-      case 'peak': return [
-        'Irradiance horaire la plus forte de mai à septembre sur l\'année type (moyenne sur une heure).',
-        'Repères : au-delà de 300 W/m², seuil usuel de fermeture d\'une protection mobile ; 600 W/m² et plus, soleil direct franc sur la façade.'];
-      case 'vsc': return [
-        'Part du ciel couvert visible depuis la façade (méthode BRE). Mur dégagé : 39,6 %.',
-        'Repères BRE : ≥ 27 % bon ; 15 à 27 % baies à agrandir ; < 15 % lumière naturelle difficile.'];
-      default: return ['Façades en couleur neutre, fenêtres dessinées.'];
-    }
-  }
-
   // ---------- Panneau ----------
-  const GROUPS = [
-    ['À un instant (ciel clair)', [['instant', 'À la date et l\'heure (W/m²)'], ['hours', 'Heures > 300 W/m² sur un jour']]],
-    ['Année type (climat du site)', [['annual', 'Moyenne / jour : année'], ['winter', 'hiver'], ['summer', 'été'], ['peak', 'Pic d\'été (W/m²)']]],
-    ['Autres', [['vsc', 'Ciel visible (lumière)'], ['none', 'Neutre']]]
-  ];
-
   function build(viewport) {
     ui.legend3d = el('div', {});
-    viewport.append(ui.legend3d);
-    ui.groups = el('div', { class: 'col-groups' }, GROUPS.map(([title, items]) => el('div', { class: 'col-group' },
-      el('div', { class: 'col-title' }, title),
-      el('div', { class: 'chips' }, items.map(([k, lab]) => el('button', { class: 'chip', 'data-m': k, onclick: () => setMode(k) }, lab))))));
-    // date et heure : sous-option des modes « instant » et « heures »
+    ui.ref = el('div', { class: 'ref3d', hidden: true });
+    viewport.append(ui.legend3d, ui.ref);
+    ui.cats = el('div', { class: 'seg3' }, Object.keys(CATS).map((c) =>
+      el('button', { class: 'seg', 'data-c': c, onclick: () => setMode(CATS[c].modes[0][0]) }, CATS[c].label)));
+    ui.modes = el('div', { class: 'chips' });
+    // date et heure : sous-option des modes « date et heure » et « heures > 300 W/m² »
     const v = P().view;
     ui.doy = el('input', { type: 'range', min: 1, max: 365, step: 1, value: v.doy });
     ui.hour = el('input', { type: 'range', min: 4, max: 22, step: 0.25, value: v.hour });
@@ -89,13 +60,11 @@
       quick.append(el('button', { class: 'chip', onclick: () => { ui.doy.value = FS.solar.doyOf(2026, m, d); onView(); } }, lab));
     }
     ui.hourRow = el('div', { class: 'time-row' }, el('span', {}, 'Heure légale'), ui.hour, ui.hourLabel);
-    ui.when = el('div', { class: 'subpanel' },
-      el('div', { class: 'time-row' }, el('span', {}, 'Date'), ui.doy, ui.doyLabel), ui.hourRow, quick);
-    ui.note = el('div', { class: 'legend-note' });
+    ui.when = el('div', { class: 'subpanel' }, el('div', { class: 'time-row' }, el('span', {}, 'Date'), ui.doy, ui.doyLabel), ui.hourRow, quick);
     ui.summary = el('div', {});
     return el('div', { class: 'panel color-panel' },
       el('h3', {}, 'Coloration des façades', el('button', { class: 'btn sm ghost', onclick: () => FS.scene3d.frame() }, 'Recadrer')),
-      ui.groups, ui.when, ui.note, ui.summary);
+      ui.cats, ui.modes, ui.when, ui.summary);
   }
 
   function setMode(m) {
@@ -105,11 +74,10 @@
     if (FS.uiReport) FS.uiReport.refresh();
   }
 
-  // le calcul « instant » suit les curseurs : on regroupe les rafraîchissements
   let pending = 0;
   function refreshSoon() { if (pending) return; pending = requestAnimationFrame(() => { pending = 0; refresh(); }); }
 
-  // ---------- Valeurs et coloration ----------
+  // ---------- Valeurs instantanées (ciel clair) ----------
   function computeField(m) {
     const D = FS.project.derived();
     if (!D.ok) return null;
@@ -125,9 +93,11 @@
   }
 
   function refresh() {
-    if (!ui.groups) return;
-    const p = P(), m = mode();
-    ui.groups.querySelectorAll('.chip').forEach((c) => c.classList.toggle('on', c.dataset.m === m));
+    if (!ui.cats) return;
+    const p = P(), m = mode(), cat = catOf(m);
+    ui.cats.querySelectorAll('.seg').forEach((b) => b.classList.toggle('on', b.dataset.c === cat));
+    ui.modes.innerHTML = '';
+    for (const [k, lab] of CATS[cat].modes) ui.modes.append(el('button', { class: 'chip' + (k === m ? ' on' : ''), onclick: () => setMode(k) }, lab));
     const v = p.view;
     ui.when.hidden = !(m === 'instant' || m === 'hours');
     ui.hourRow.hidden = m !== 'instant';
@@ -135,40 +105,37 @@
     ui.hourLabel.textContent = FS.solar.fmtHour(v.hour);
     if (document.activeElement !== ui.doy) ui.doy.value = v.doy;
     if (document.activeElement !== ui.hour) ui.hour.value = v.hour;
-    ui.note.innerHTML = '';
-    for (const t of note(m)) ui.note.append(el('p', {}, t));
-    ui.legend3d.innerHTML = '';
-    ui.summary.innerHTML = '';
+    ui.legend3d.innerHTML = ''; ui.summary.innerHTML = ''; ui.ref.innerHTML = '';
     const sc = scale(m), D = FS.project.derived();
+    ui.ref.hidden = !sc || !D.ok;
     if (!sc || !D.ok) { FS.scene3d.setColors(null); return; }
     const color = (x) => FS.charts.colorAt(x / sc.max, sc.ramp);
+    const R = FS.uiResults && FS.uiResults.get();
 
     if (m === 'instant' || m === 'hours') {
       const f = computeField(m);
       FS.scene3d.setColors((id, si, k) => {
         const fi = D.model.facades.findIndex((x) => x.id === id);
-        const val = fi >= 0 && f.values[fi][si] ? f.values[fi][si][k] : null;
+        if (fi < 0 || D.model.facades[fi].ignored) return null;
+        const val = f.values[fi][si] ? f.values[fi][si][k] : null;
         return val == null ? null : color(val);
       });
-      ui.legend3d.append(FS.charts.legendScale(sc));
-      // moyennes par façade
-      const rows = D.model.facades.map((fa, fi) => ({ id: fa.id, label: fa.label, v: FS.instant.facadeMean(D, f.values, fi) }));
+      const rows = D.model.facades.map((fa, fi) => ({ id: fa.id, label: fa.label, ignored: fa.ignored, v: FS.instant.facadeMean(D, f.values, fi) })).filter((r) => !r.ignored);
       ui.summary.append(summaryTable(rows, sc, m === 'hours' ? 1 : 0),
-        el('small', {}, m === 'instant' ? (f.extra.sky.up ? 'Soleil à ' + FS.fmt(f.extra.sky.alt / FS.RAD, 0) + '° de hauteur.' : 'Soleil sous l\'horizon : aucun rayonnement.')
-          : 'Durée du jour : ' + FS.fmtFixed(f.extra.dayLength, 1) + ' h. Calcul en ' + FS.fmt(f.ms, 0) + ' ms.'));
-      return;
+        el('small', {}, m === 'instant' ? (f.extra.sky.up ? 'Soleil à ' + FS.fmt(f.extra.sky.alt / FS.RAD, 0) + '° de hauteur ; ombres portées à cet instant.' : 'Soleil sous l\'horizon : aucun rayonnement.')
+          : 'Durée du jour : ' + FS.fmtFixed(f.extra.dayLength, 1) + ' h. Ciel clair, pas de 10 min, masques compris.'));
+    } else {
+      if (!R) { FS.scene3d.setColors(null); ui.summary.append(el('small', {}, 'Calcul en attente du climat…')); return; }
+      const bySeg = {};
+      for (const fa of R.facades) { bySeg[fa.id] = {}; for (const c of fa.cells) bySeg[fa.id][c.si] = c; }
+      FS.scene3d.setColors((id, si, k) => {
+        const c = bySeg[id] && bySeg[id][si], val = c && c.v[k];
+        return val ? color(sc.get(val)) : null;
+      });
+      ui.summary.append(summaryTable(R.facades.map((fa) => ({ id: fa.id, label: fa.label, v: sc.get(fa) })), sc, sc.digits || 0));
     }
-    // modes « année type » : besoin des résultats solaires
-    const R = FS.uiResults && FS.uiResults.get();
-    if (!R) { FS.scene3d.setColors(null); ui.summary.append(el('small', {}, 'Calcul en attente du climat…')); return; }
-    const bySeg = {};
-    for (const fa of R.facades) { bySeg[fa.id] = {}; for (const c of fa.cells) bySeg[fa.id][c.si] = c; }
-    FS.scene3d.setColors((id, si, k) => {
-      const c = bySeg[id] && bySeg[id][si], val = c && c.v[k];
-      return val ? color(sc.get(val)) : null;
-    });
     ui.legend3d.append(FS.charts.legendScale(sc));
-    ui.summary.append(summaryTable(R.facades.map((fa) => ({ id: fa.id, label: fa.label, v: sc.get(fa) })), sc, sc.digits || 0));
+    drawReference(m, sc, D, R);
   }
 
   function summaryTable(rows, sc, digits) {
@@ -177,6 +144,110 @@
       el('tbody', {}, rows.map((r) => el('tr', {},
         el('td', {}, el('span', { class: 'swatch', style: { background: FS.charts.colorAt(r.v / sc.max, sc.ramp) } }), r.id + ' · ' + r.label),
         el('td', { class: 'num' }, FS.fmtFixed(r.v, digits))))));
+  }
+
+  // ---------- Repères graphiques (en haut à droite de la vue) ----------
+  function refsFor(D) {
+    const c = FS.climate.get();
+    if (!c || !FS.uiResults || !FS.uiResults.solarOpts) return null;
+    return FS.results.references(c, D.lat, D.lon, Object.assign(FS.uiResults.solarOpts(P()), { model: P().solar.model }));
+  }
+
+  function drawReference(m, sc, D, R) {
+    const box = ui.ref;
+    const col = (x) => FS.charts.colorAt(x / sc.max, sc.ramp);
+    if (m === 'peak' || m === 'instant') {
+      const refs = refsFor(D);
+      if (!refs) { box.hidden = true; return; }
+      box.append(el('div', { class: 'ref-title' }, 'Repères : façade parisienne dégagée, été'), roseRef(refs, col, sc.max),
+        el('div', { class: 'ref-key' }, el('span', { class: 'k-out' }, 'contour : pic d\'été'), el('span', { class: 'k-in' }, 'plein : moyenne des heures de jour')));
+      return;
+    }
+    if (m === 'hours') {
+      const zones = [[0, 1.5, 'exposition brève'], [1.5, 2.5, 'exposition prolongée'], [2.5, 5, 'forte exposition']];
+      const W = 250, H = 92, x = (h) => 8 + (W - 16) * h / 5;
+      const svg = S('svg', { viewBox: '0 0 ' + W + ' ' + H, class: 'chart refsvg' });
+      zones.forEach(([a, b, lab], i) => {
+        svg.append(S('rect', { x: x(a), y: 18, width: x(b) - x(a) - 2, height: 18, fill: col((a + b) / 2) }));
+        svg.append(S('text', { x: (x(a) + x(b)) / 2, y: 52 + (i % 2) * 12, class: 'tick', 'text-anchor': 'middle' }, lab));
+      });
+      for (const h of [0, 1.5, 2.5, 5]) svg.append(S('text', { x: x(h), y: 13, class: 'tick', 'text-anchor': h === 0 ? 'start' : h === 5 ? 'end' : 'middle' }, h === 5 ? '5 h et +' : FS.fmt(h, 1).replace(',5', ' h 30').replace(/^(\d)$/, '$1 h')));
+      box.append(el('div', { class: 'ref-title' }, 'Repères : heures > 300 W/m² par jour'), svg);
+      return;
+    }
+    if (PERIOD_TXT[m]) {
+      const refs = refsFor(D);
+      if (!refs) { box.hidden = true; return; }
+      const vig = m === 'ete' ? { v: 2.5, lab: 'vigilance été' } : m === 'hiver' ? { v: 1.5, lab: 'apports utiles' } : { v: 3, lab: 'vigilance mi-saison' };
+      box.append(el('div', { class: 'ref-title' }, 'Repères : façade dégagée, ' + PERIOD_TXT[m]), barsRef(refs, m, col, vig, R),
+        el('div', { class: 'ref-key' }, el('span', { class: 'k-line' }, vig.lab + ' : ' + FS.fmtFixed(vig.v, 1) + ' kWh/m²·j'), el('span', { class: 'k-dot' }, 'vos façades (masques compris)')));
+      return;
+    }
+    if (m === 'vsc') {
+      const W = 250, H = 78, x = (v) => 8 + (W - 16) * v / 40;
+      const svg = S('svg', { viewBox: '0 0 ' + W + ' ' + H, class: 'chart refsvg' });
+      [[0, 15, 'difficile'], [15, 27, 'moyen'], [27, 40, 'bon']].forEach(([a, b, lab]) => {
+        svg.append(S('rect', { x: x(a), y: 18, width: x(b) - x(a) - 2, height: 18, fill: col((a + b) / 2) }));
+        svg.append(S('text', { x: (x(a) + x(b)) / 2, y: 52, class: 'tick', 'text-anchor': 'middle' }, lab));
+      });
+      for (const v of [0, 15, 27, 40]) svg.append(S('text', { x: x(v), y: 13, class: 'tick', 'text-anchor': v === 0 ? 'start' : v === 40 ? 'end' : 'middle' }, v + ' %'));
+      svg.append(S('line', { x1: x(39.6), x2: x(39.6), y1: 16, y2: 40, class: 'refmark' }));
+      svg.append(S('text', { x: x(39.6), y: 68, class: 'tick', 'text-anchor': 'end' }, 'mur dégagé 39,6 %'));
+      box.append(el('div', { class: 'ref-title' }, 'Repères BRE : ciel visible'), svg);
+      return;
+    }
+    box.hidden = true;
+  }
+
+  // Rose de référence : pic d'été (contour) et moyenne des heures de jour en été (plein), 8 orientations
+  function roseRef(refs, col, max) {
+    const W = 230, c = W / 2, r0 = 10, r1 = c - 24;
+    const rad = (v) => r0 + (r1 - r0) * Math.min(1, v / max);
+    const svg = S('svg', { viewBox: '0 0 ' + W + ' ' + W, class: 'chart refsvg rose' });
+    for (const v of [300, 600, 900]) {
+      svg.append(S('circle', { cx: c, cy: c, r: rad(v), class: 'grid' }));
+      if (v < 900) svg.append(S('text', { x: c + rad(v) * Math.SQRT1_2 + 2, y: c - rad(v) * Math.SQRT1_2 - 2, class: 'tick' }, v));
+    }
+    const wedge = (a0, a1, rr) => {
+      const p = (a, r) => (c + r * Math.sin(a)).toFixed(1) + ',' + (c - r * Math.cos(a)).toFixed(1);
+      return 'M' + p(a0, r0) + 'L' + p(a0, rr) + 'A' + rr + ',' + rr + ' 0 0 1 ' + p(a1, rr) + 'L' + p(a1, r0) + 'A' + r0 + ',' + r0 + ' 0 0 0 ' + p(a0, r0) + 'Z';
+    };
+    for (const r of refs) {
+      const a0 = (r.az - 17) * Math.PI / 180, a1 = (r.az + 17) * Math.PI / 180;
+      svg.append(S('path', { d: wedge(a0, a1, rad(r.peak)), fill: 'none', stroke: col(r.peak), 'stroke-width': 2.2 }));
+      svg.append(S('path', { d: wedge(a0, a1, rad(r.meanSummer)), fill: col(r.meanSummer), class: 'wedge' }));
+      const lr = r1 + 12, la = r.az * Math.PI / 180;
+      svg.append(S('text', { x: c + lr * Math.sin(la), y: c - lr * Math.cos(la) + 4, class: r.az % 90 ? 'tick' : 'card', 'text-anchor': 'middle' }, r.label));
+    }
+    return svg;
+  }
+
+  // Barres de référence par orientation (kWh/m²·jour), seuil de vigilance, et façades du projet
+  function barsRef(refs, season, col, vig, R) {
+    const W = 260, H = 150, ml = 22, mr = 6, mt = 8, mb = 20, iw = W - ml - mr, ih = H - mt - mb, top = 4;
+    const y = (v) => mt + ih - ih * Math.min(v, top) / top, bw = iw / refs.length;
+    const svg = S('svg', { viewBox: '0 0 ' + W + ' ' + H, class: 'chart refsvg' });
+    for (let v = 0; v <= top; v++) {
+      svg.append(S('line', { x1: ml, x2: W - mr, y1: y(v), y2: y(v), class: v ? 'grid' : 'axis' }));
+      svg.append(S('text', { x: ml - 4, y: y(v) + 3, class: 'tick', 'text-anchor': 'end' }, v));
+    }
+    refs.forEach((r, i) => {
+      const v = r.daily[season], x = ml + i * bw + bw * 0.16, w = bw * 0.68;
+      svg.append(S('rect', { x, y: y(v), width: w, height: y(0) - y(v), rx: 2, fill: col(v) }));
+      svg.append(S('text', { x: ml + i * bw + bw / 2, y: H - 6, class: 'tick', 'text-anchor': 'middle' }, r.label));
+    });
+    svg.append(S('line', { x1: ml, x2: W - mr, y1: y(vig.v), y2: y(vig.v), class: 'refth' }));
+
+    if (R) {
+      const idx = (az) => Math.round(((az % 360) + 360) % 360 / 45) % 8;
+      const count = {};
+      for (const f of R.facades) {
+        const i = idx(f.az), k = (count[i] = (count[i] || 0) + 1) - 1;
+        const cx = ml + i * bw + bw / 2 + (k % 3 - 1) * 5;
+        svg.append(S('circle', { cx, cy: y(f.daily[season]), r: 3.4, class: 'projdot' }));
+      }
+    }
+    return svg;
   }
 
   // Info-bulle d'une façade survolée
@@ -196,7 +267,7 @@
   // Pour la fiche offre et l'onglet Exposition
   const legendNow = () => { const sc = scale(mode()); return sc ? FS.charts.legendScale(sc) : null; };
   const caption = () => { const sc = scale(mode()); return sc ? sc.label + ' (' + sc.unit + ')' : 'façades neutres'; };
-  const roseMode = () => (FS.charts.MODES[mode()] ? mode() : 'annual');
+  const roseMode = () => 'jour';
 
   FS.view3d = { build, refresh, setMode, tipFor, legendNow, caption, roseMode, mode, scale };
 })(window.FS);

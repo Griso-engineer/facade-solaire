@@ -95,9 +95,10 @@
     }
 
     // G. Apports d'hiver valorisables
-    const fw = R.facades.reduce((a, f) => (f.winter > a.winter ? f : a));
-    if (fw.winter >= 250) out.push({ score: 30, kind: 'hiver',
-      text: 'La façade ' + fw.id + ' (' + name(fw.label) + ') reçoit ' + FS.fmt(fw.winter, 0) + ' kWh/m² d\'octobre à avril : des apports gratuits à valoriser en hiver, plutôt avec une protection mobile qu\'avec un dispositif fixe.' });
+    const wd = (f) => (f.daily ? f.daily.hiver : f.winter / 90);
+    const fw = R.facades.reduce((a, f) => (wd(f) > wd(a) ? f : a));
+    if (wd(fw) >= 1.5) out.push({ score: 30, kind: 'hiver',
+      text: 'La façade ' + fw.id + ' (' + name(fw.label) + ') reçoit ' + FS.fmtFixed(wd(fw), 1) + ' kWh/m² par jour en hiver (déc.–févr.) : des apports gratuits à valoriser, plutôt avec une protection mobile qu\'avec un dispositif fixe.' });
 
     // repli : façade la plus exposée
     if (out.length < 3) {

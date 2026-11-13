@@ -104,8 +104,8 @@
         el('p', { class: 'sh-note' }, 'Protection solaire : ' + protText(T) + '. Consignes ' + T.tH + ' / ' + T.tC + ' °C, zone de façade de ' + FS.fmt(T.depth, 1) +
           ' m, renouvellement d\'air ' + FS.fmt(T.ach, 1) + ' vol/h, apports internes ' + FS.fmt(T.qInt, 0) + ' W/m², inertie ' + FS.thermal.INERTIA_LABEL[T.inertia].toLowerCase() + '.'));
     }
-    colR.append(el('h3', {}, 'Rose des orientations'), el('div', { class: 'sh-rose' }, FS.charts.rose(R, 'annual', null)),
-      el('p', { class: 'sh-note' }, 'Irradiation annuelle par façade (kWh/m²·an), masques compris.'));
+    colR.append(el('h3', {}, 'Rose des orientations'), el('div', { class: 'sh-rose' }, FS.charts.rose(R, 'jour', null)),
+      el('p', { class: 'sh-note' }, 'Rayonnement reçu en moyenne par jour sur l\'année (kWh/m²·jour), masques compris.'));
     if (DL) {
       const fs = DL.filter((f) => !f.pignon && f.low);
       colR.append(el('h3', {}, 'Lumière naturelle (ordre de grandeur)'),
@@ -137,7 +137,7 @@
       tb.append(el('tr', {},
         el('td', {}, el('b', {}, f.id)), el('td', {}, f.label + ' ' + Math.round(f.az) + '°'),
         el('td', { class: 'num' }, FS.fmt(f.area, 0) + ' / ' + FS.fmt(f.glazed, 0)),
-        el('td', { class: 'num' }, el('span', { class: 'swatch', style: { background: FS.charts.colorFor('annual', f) } }), FS.fmt(f.annual, 0)),
+        el('td', { class: 'num' }, el('span', { class: 'swatch', style: { background: FS.charts.colorFor('jour', f) } }), FS.fmtFixed(f.daily.annee, 1)),
         el('td', { class: 'num' }, R.masks ? '−' + FS.pct(f.maskLoss) : '—'),
         el('td', { class: 'num' }, FS.pct(f.shareSummer)),
         el('td', { class: 'num' }, FS.fmt(f.peak, 0)),
@@ -148,7 +148,7 @@
     return el('table', { class: 'tbl sh-tbl' },
       el('thead', {}, el('tr', {},
         el('th', {}, 'N°'), el('th', {}, 'Orient.'), el('th', { class: 'num' }, 'Façade /', el('br'), 'vitrage m²'),
-        el('th', { class: 'num' }, 'Irradiation', el('br'), 'kWh/m²·an'), el('th', { class: 'num' }, 'Masques'),
+        el('th', { class: 'num' }, 'Rayonnement', el('br'), 'kWh/m²·jour'), el('th', { class: 'num' }, 'Masques'),
         el('th', { class: 'num' }, 'Part des', el('br'), 'apports été'), el('th', { class: 'num' }, 'Pic été', el('br'), 'W/m²'), el('th', { class: 'num' }, 'VSC', el('br'), 'bas'),
         el('th', { class: 'num' }, 'Chauffage', el('br'), 'kWh/m²·an'), el('th', { class: 'num' }, 'Froid', el('br'), 'kWh/m²·an'))),
       tb);
