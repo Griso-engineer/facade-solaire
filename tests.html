@@ -33,6 +33,8 @@
   <script src="js/instant.js"></script>
   <script src="js/thermal.js"></script>
   <script src="js/daylight.js"></script>
+  <script src="js/wind.js"></script>
+  <script src="js/windsite.js"></script>
   <script src="js/messages.js"></script>
   <script>
   (function () {
@@ -513,6 +515,62 @@
       near('Moyenne par jour, année : 12 × 31 / 365', d.annee, 372 / 365, 1e-9, ' kWh/m²·j');
       near('Moyenne par jour, été : 3 × 31 / 92', d.ete, 93 / 92, 1e-9, ' kWh/m²·j');
       near('Moyenne par jour, hiver : 3 × 31 / 90', d.hiver, 93 / 90, 1e-9, ' kWh/m²·j');
+    }
+
+    // ------------------------------------------------------------------
+    section('12. Vent : profil, pluie battante, Cp, ouverture, obstacles');
+    {
+      const Wd = FS.wind;
+      near('Profil : facteur de hauteur = 1 à 10 m en terrain II', Wd.heightFactor(10, 'II'), 1, 1e-12);
+      near('Profil : k_r = 0,19 en terrain II', Wd.kr(0.05), 0.19, 1e-12);
+      near('Profil : c_r(z < z_min) = c_r(z_min), terrain IV', Wd.cr(5, 'IV'), Wd.cr(15, 'IV'), 1e-12);
+      near('Profil : terrain IV à 30 m, k_r·ln(30/1) / (0,19·ln(10/0,05))', Wd.heightFactor(30, 'IV'), 0.19 * Math.pow(20, 0.07) * Math.log(30) / (0.19 * Math.log(200)), 1e-9);
+      // série synthétique : une heure de pluie, v = 5 m/s, r = 1 mm, vent du sud-ouest
+      const syn = (rows) => {
+        const n = rows.length, d = { n, years: 1, v10: new Float32Array(n), d10: new Float32Array(n), v100: new Float32Array(n), d100: new Float32Array(n),
+          rain: new Float32Array(n), temp: new Float32Array(n), month: new Uint8Array(n), utc: new Float64Array(n) };
+        rows.forEach((r, i) => { d.v10[i] = r.v; d.d10[i] = r.dir; d.rain[i] = r.rain || 0; d.temp[i] = r.t == null ? 20 : r.t; d.month[i] = r.m == null ? 5 : r.m; d.utc[i] = r.utc || 0; });
+        return d;
+      };
+      const d1 = syn([{ v: 5, dir: 225, rain: 1 }, { v: 8, dir: 45, rain: 0 }]);
+      near('ISO 15927-3 : I_A = (2/9)·5·1^(8/9)', Wd.rainIndex(d1), 10 / 9, 1e-6, ' L/m²');
+      near('ISO 15927-3 : mur face au vent (θ = D)', Wd.wallRainIndex(d1, 225), 10 / 9, 1e-6, ' L/m²');
+      near('ISO 15927-3 : mur à 60° du vent → cos 60° = moitié', Wd.wallRainIndex(d1, 165), 5 / 9, 1e-5, ' L/m²');
+      near('ISO 15927-3 : mur sous le vent → 0', Wd.wallRainIndex(d1, 45), 0, 1e-9, ' L/m²');
+      const d2 = syn([{ v: 4, dir: 0, rain: 2 }]);
+      near('ISO 15927-3 : r^(8/9) pour 2 mm/h', Wd.rainIndex(d2), (2 / 9) * 4 * Math.pow(2, 8 / 9), 1e-6, ' L/m²');
+      check('Coefficient d\'obstacle O : 5 m → 0,2 ; 30 m → 0,5 ; 110 m → 0,9 ; aucun → 1',
+        Wd.obstructionFactor(5) === 0.2 && Wd.obstructionFactor(30) === 0.5 && Wd.obstructionFactor(110) === 0.9 && Wd.obstructionFactor(null) === 1, '');
+      check('BS 8104 : 20 abritée, 40 modérée, 80 sévère, 120 très sévère',
+        [20, 40, 80, 120].map((x) => Wd.rainClass(x).label).join(' / ') === 'abritée / modérée / sévère / très sévère', [20, 40, 80, 120].map((x) => Wd.rainClass(x).label).join(' / '));
+      // Swami & Chandra, G = 0 (valeurs calculées à la main)
+      near('Swami & Chandra : Cp/Cp(0) à 0° = ln 2,734', Wd.scNorm(0, 0), Math.log(2.734), 1e-9);
+      near('Swami & Chandra : Cp/Cp(0) à 90°', Wd.scNorm(90, 0), -0.738, 0.002);
+      near('Swami & Chandra : Cp/Cp(0) à 180° = ln 0,545', Wd.scNorm(180, 0), Math.log(0.545), 1e-9);
+      near('Swami & Chandra : symétrie θ / −θ', Wd.scNorm(-50, 0.5), Wd.scNorm(50, 0.5), 1e-12);
+      near('Cp au vent, façade exposée : 0,7 × ln 2,734', Wd.cp(0, 0, 'expose'), 0.7 * Math.log(2.734), 1e-9);
+      // rose : fréquences + calmes = 1
+      const d3 = syn([{ v: 3, dir: 0 }, { v: 3, dir: 10 }, { v: 7, dir: 180 }, { v: 0.2, dir: 90 }]);
+      const rs = Wd.rose(d3, 1, 'annee');
+      near('Rose : somme des secteurs et des calmes = 1', rs.sectors.reduce((a, s) => a + s.freq, 0) + rs.calm, 1, 1e-9);
+      near('Rose : secteur N = 50 % (0° et 10°)', rs.sectors[0].freq, 0.5, 1e-9);
+      check('Rose : 7 m/s dans la classe 6–8 m/s du secteur S', rs.sectors[8].cls[3] === 0.25, String(rs.sectors[8].cls));
+      // heures d'ouverture : un mercredi de juin, 24 h à 20 °C et 3 m/s
+      const t0 = Date.UTC(2026, 5, 17, 0, 30);
+      const d4 = syn(Array.from({ length: 24 }, (_, h) => ({ v: 3, dir: 180, utc: t0 + h * 3600e3 })));
+      const vh = Wd.ventHours(d4, 1, { tmin: 16, tmax: 26, vmin: 1, vmax: 6, occ: true }, [{ az: 180 }, { az: 0 }], [0, 0], ['semi', 'semi'], 'Europe/Paris');
+      check('Ouverture : 11 h de bureau (8 h–19 h, heure d\'été), toutes possibles', vh.occ === 11 && vh.total === 11 && vh.bySeason.ete === 11, vh.occ + ' / ' + vh.total);
+      check('Ouverture : façade au vent comptée, façade sous le vent non', vh.facades[0] === 11 && vh.facades[1] === 0, vh.facades.join(' / '));
+      const vh2 = Wd.ventHours(d4, 1, { tmin: 22, tmax: 26, vmin: 1, vmax: 6, occ: false }, [], [], [], 'Europe/Paris');
+      check('Ouverture : hors plage de température → 0', vh2.total === 0 && vh2.occ === 24, vh2.total + ' / ' + vh2.occ);
+      // obstacle devant une façade : bloc de 20 m à 10 m au sud d'un cube de 10 m
+      const sq = [[-5, -5], [5, -5], [5, 5], [-5, 5]];
+      const D = { xy: sq, rings: [sq], H: 10, nbs: [{ xy: [[-10, -25], [10, -25], [10, -15], [-10, -15]], height: 20 }] };
+      const f = { n: [0, -1], segs: [{ p0: [-5, -5], p1: [5, -5], n: [0, -1], len: 10, edge: 0 }] };
+      const hit = FS.windSite.obstacleDistance(D, f, 10);
+      near('Obstacle : distance au bloc voisin (depuis le nu de façade)', hit ? hit.d + 0.1 : NaN, 10, 0.01, ' m');
+      check('Obstacle : ignoré s\'il est plus bas que la hauteur demandée', FS.windSite.obstacleDistance(D, f, 25) === null, '');
+      near('Rapport des côtés G d\'un carré : ln 1 = 0', FS.windSite.sideRatioG(D, { n: [0, -1], length: 10 }), 0, 1e-9);
     }
 
     document.getElementById('title').textContent = nKo ? nKo + ' test(s) en échec sur ' + (nOk + nKo) : 'Tous les tests passent (' + nOk + ')';

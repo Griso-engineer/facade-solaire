@@ -108,5 +108,40 @@
     return out.sort((a, b) => b.score - a.score).slice(0, 5);
   }
 
-  FS.messages = { generate };
+  /* Messages clés sur le vent (fiche offre), à partir des résultats de l'onglet Vent (FS.uiWind.compute()).
+     Trois messages : vents dominants et confort piéton, pluie battante, ventilation naturelle. */
+  const SEC = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSO', 'SO', 'OSO', 'O', 'ONO', 'NO', 'NNO'];
+  function wind(W, D, P) {
+    if (!W) return [];
+    const out = [], w = P.wind;
+    // 1. vents dominants, confort piéton
+    const dom = W.dom.slice(0, 2).map((s) => SEC[Math.round(s.dir / 22.5) % 16] + ' (' + FS.pct(s.share) + ')');
+    const hi = W.ped.points.filter((p) => p.level === 2), mid = W.ped.points.filter((p) => p.level === 1);
+    const pedTxt = hi.length ? hi.length + ' point' + (hi.length > 1 ? 's' : '') + ' de vigilance élevée pour le confort piéton (' +
+        Array.from(new Set(hi.map((p) => ({ coin: 'angle exposé', rabattement: 'pied de façade au vent', passage: 'passage dans l\'axe du vent', pilotis: 'pilotis', voisin: 'voisin haut' })[p.kind]))).join(', ') +
+        ') : à vérifier en soufflerie ou CFD si les abords sont un enjeu'
+      : mid.length ? mid.length + ' point' + (mid.length > 1 ? 's' : '') + ' de vigilance modérée pour le confort piéton, sans configuration critique relevée'
+        : 'pas de configuration critique relevée pour le confort piéton (lecture qualitative)';
+    out.push({ kind: 'vent', text: 'Vents forts dominants : ' + (dom.length ? dom.join(', ') : 'sans direction marquée') + ' des heures au-delà de 5 m/s ; vent moyen ' +
+      FS.fmtFixed(W.roses.annee.mean, 1) + ' m/s à ' + FS.fmt(D.H, 0) + ' m (ERA5, rafales lissées). ' + pedTxt.charAt(0).toUpperCase() + pedTxt.slice(1) + '.' });
+    // 2. pluie battante
+    if (W.rain.length) {
+      const r = W.rain.reduce((a, x) => (x.top > a.top ? x : a));
+      const advice = r.cls.level >= 2 ? ' : soigner l\'étanchéité des menuiseries, appuis, couvertines et joints, et choisir des parements peu absorbants.'
+        : r.cls.level === 1 ? ' : détails d\'étanchéité courants, soignés en tête de façade.' : ' : pas de disposition particulière.';
+      out.push({ kind: 'pluie', text: 'Pluie battante : façade ' + r.id + ' (' + name(r.label) + ') la plus exposée, ≈ ' + FS.fmt(r.top, 0) +
+        ' L/m²·an en tête de façade, exposition ' + r.cls.label + ' (ISO 15927-3, BS 8104)' + advice });
+    }
+    // 3. ventilation naturelle
+    const v = W.vent;
+    const share = w.occ && v.occ ? v.total / v.occ : v.total / 8760;
+    const best = W.cpRows.map((r, k) => ({ r, h: v.facades[k] })).sort((a, b) => b.h - a.h)[0];
+    out.push({ kind: 'ventilation', text: 'Ventilation naturelle : ouverture possible environ ' + FS.fmt(Math.round(v.total / 10) * 10, 0) + ' h/an' +
+      (w.occ ? ' en heures de bureau (' + FS.pct(share) + ')' : ' (' + FS.pct(share) + ' de l\'année)') + ', surtout ' +
+      (v.bySeason.ete >= Math.max(v.bySeason.printemps, v.bySeason.automne) ? 'en été' : v.bySeason.printemps >= v.bySeason.automne ? 'au printemps' : 'en automne') +
+      (best ? ' ; façade ' + best.r.id + ' le plus souvent au vent, à associer aux façades opposées pour un balayage traversant.' : '.') });
+    return out;
+  }
+
+  FS.messages = { generate, wind };
 })(window.FS);

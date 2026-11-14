@@ -31,6 +31,7 @@
       climateInfo: null,       // source du climat utilisé (pour mémoire)
       thermal: FS.thermal.defaults(),
       daylight: FS.daylight.defaults(),
+      wind: { terrain: 'IV', exposure: 'auto', tmin: 16, tmax: 26, vmin: 1, vmax: 6, occ: true, pilotis: false },
       mapView: null
     };
   }
@@ -175,6 +176,7 @@
     p.nbDefaults = Object.assign(defaults().nbDefaults, s.nbDefaults || {});
     p.thermal = Object.assign(FS.thermal.defaults(), s.thermal || {});
     p.daylight = Object.assign(FS.daylight.defaults(), s.daylight || {});
+    p.wind = Object.assign({ terrain: 'IV', exposure: 'auto', tmin: 16, tmax: 26, vmin: 1, vmax: 6, occ: true, pilotis: false }, s.wind || {});
     p.thermal.protection = Object.assign(FS.thermal.defaults().protection, (s.thermal && s.thermal.protection) || {});
     p.steps = Object.assign({}, s.steps || {});
     p.drawn = s.drawn || [];

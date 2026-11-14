@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Insolatio · Tracés</title>
-  <meta name="description" content="Outil Tracés d'analyse rapide des enjeux solaires et thermiques des façades d'un bâtiment : irradiation, masques, apports, ordres de grandeur des besoins, lumière naturelle.">
+  <meta name="description" content="Outil Tracés d'analyse rapide des enjeux solaires, thermiques et de vent des façades d'un bâtiment : irradiation, masques, apports, ordres de grandeur des besoins, lumière naturelle, pluie battante, ventilation, confort piéton.">
   <meta name="theme-color" content="#ffffff">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23FB635F'/%3E%3Crect x='8' y='9' width='11' height='17' fill='none' stroke='%23fff' stroke-width='3'/%3E%3Ccircle cx='23' cy='9' r='3.5' fill='%23fff'/%3E%3C/svg%3E">
   <script>
@@ -15,11 +15,11 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-  <link rel="stylesheet" href="css/style.css?v=10">
+  <link rel="stylesheet" href="css/style.css?v=11">
 </head>
 <body>
   <div class="rail" aria-hidden="true">
-    <span>Insolatio — enjeux solaires et thermiques des façades</span>
+    <span>Insolatio — soleil, chaleur et vent des façades</span>
     <b>tracés</b>
     <span>Analyse d'ordre de grandeur, phase offre</span>
   </div>
@@ -38,10 +38,10 @@
   <nav class="tool-tabs" id="nav" aria-label="Onglets">
     <a href="#/site" data-route="site">Site</a>
     <a href="#/3d" data-route="3d">Maquette 3D</a>
-    <a href="#/resultats" data-route="resultats">Exposition</a>
+    <a href="#/resultats" data-route="resultats">Exposition solaire</a>
     <a href="#/thermique" data-route="thermique">Thermique</a>
+    <a href="#/vent" data-route="vent">Vent</a>
     <a href="#/fiche" data-route="fiche">Fiche offre</a>
-    <a href="#/methode" data-route="methode">Méthode</a>
   </nav>
 
   <main id="app"></main>
@@ -56,7 +56,7 @@
       </address>
     </div>
     <div class="foot-cols">
-      <div><b>Insolatio</b><span>Exposition au soleil des façades : analyse rapide des enjeux solaires et thermiques des façades, pour la phase offre.</span></div>
+      <div><b>Insolatio</b><span>Exposition au soleil des façades : analyse rapide des enjeux solaires, thermiques et de vent des façades, pour la phase offre.</span></div>
       <div><b>Avertissement</b><span>Ordres de grandeur. Ce n'est ni une simulation thermique dynamique (STD) ni un calcul réglementaire (RE2020, RT existant).</span></div>
       <div><b>Données</b><span>Bâtiments © IGN BD TOPO (Licence ouverte Etalab 2.0) et contributeurs OpenStreetMap (ODbL) · climat ERA5 via Open-Meteo (CC BY 4.0)</span></div>
     </div>
@@ -84,11 +84,14 @@
   <script src="js/project.js"></script>
   <script src="js/map.js"></script>
   <script src="js/scene3d.js"></script>
+  <script src="js/wind.js"></script>
+  <script src="js/windsite.js"></script>
   <script src="js/ui-site.js"></script>
   <script src="js/ui-results.js"></script>
   <script src="js/view3d.js"></script>
   <script src="js/ui-thermal.js"></script>
   <script src="js/ui-daylight.js"></script>
+  <script src="js/ui-wind.js"></script>
   <script src="js/messages.js"></script>
   <script src="js/ui-report.js"></script>
   <script src="js/app.js"></script>

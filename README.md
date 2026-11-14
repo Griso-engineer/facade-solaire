@@ -2,13 +2,15 @@
 
 *Insolatio* : en latin, l'exposition au soleil.
 
-Analyse rapide des enjeux solaires et thermiques des façades d'un bâtiment existant ou projeté,
+Analyse rapide des enjeux solaires, thermiques et de vent des façades d'un bâtiment existant ou projeté,
 pour la phase offre : en une dizaine de minutes, une lecture argumentée de l'exposition de chaque
-façade, des masques, des apports et des ordres de grandeur des besoins.
+façade, des masques, des apports, des ordres de grandeur des besoins, et des enjeux de vent (pluie battante,
+ventilation naturelle, confort piéton).
 
 > **Ce n'est ni une simulation thermique dynamique (STD) ni un calcul réglementaire.**
 > Les résultats sont des ordres de grandeur pour cadrer les enjeux. Ils ne remplacent ni une
-> étude thermique, ni une étude d'éclairement, ni un calcul RE2020 / RT existant.
+> étude thermique, ni une étude d'éclairement, ni un calcul RE2020 / RT existant, ni une étude
+> aéraulique (CFD ou soufflerie).
 
 **En ligne : https://griso-engineer.github.io/insolatio/**
 
@@ -22,6 +24,7 @@ façade, des masques, des apports et des ordres de grandeur des besoins.
 | 4 | Bilan thermique mensuel (ISO 13790 / 52016-1) et variantes de vitrage | fait |
 | 5 | Lumière naturelle : VSC et facteur de lumière du jour moyen (BRE) | fait |
 | 6 | Fiche offre A4 paysage | fait |
+| 7 | Vent : climat, pluie battante, ventilation naturelle, confort piéton | fait |
 
 ## Utilisation en 10 minutes
 
@@ -40,11 +43,14 @@ façade, des masques, des apports et des ordres de grandeur des besoins.
    *rayonnement moyen par période* (printemps, été, automne, hiver, en kWh/m²·jour), *autres*
    (ciel visible, neutre). Les repères (ordres de grandeur, seuils) sont dessinés en haut à droite de
    la vue. Fenêtres et tableaux sont dessinés en 3D.
-3. **Exposition** : situer le bâtiment (jauge des apports d'été par m² de plancher, équivalences en
+3. **Exposition solaire** : situer le bâtiment (jauge des apports d'été par m² de plancher, équivalences en
    radiateurs, part des déperditions d'hiver couverte par le soleil), puis le détail par façade et
    par saison, le profil mensuel et le diagramme de masque sur 360°.
 4. **Thermique** : choisir 2 à 4 vitrages, la variante de référence et, si besoin, une protection solaire.
-5. **Fiche offre** : relire les messages clés, puis « Imprimer / enregistrer en PDF » (paysage, sans
+5. **Vent** : choisir la catégorie de terrain ; lire la rose des vents (année, saisons), la pluie
+   battante par façade, les heures d'ouverture possibles (plages réglables) et la carte des points
+   de vigilance pour le confort piéton (case « pilotis » si le projet en comporte).
+6. **Fiche offre** : relire les messages clés, puis « Imprimer / enregistrer en PDF » (paysage, sans
    marges, graphiques d'arrière-plan activés).
 
 Le projet s'enregistre dans le navigateur ; « Exporter » / « Importer » l'échangent en JSON. Un lien
@@ -54,6 +60,7 @@ Le projet s'enregistre dans le navigateur ; « Exporter » / « Importer » l'é
 
 - **Page 1** : vue 3D colorée, carte avec façades numérotées, 3 à 5 messages clés, synthèse par façade
   (irradiation, masques, part des apports d'été, pic, VSC, besoins de la variante de référence),
+  2 à 3 messages sur le vent (vents dominants et confort piéton, pluie battante, ventilation naturelle),
   hypothèses principales, avertissement.
 - **Page 2** : variantes de vitrage (tableau et graphique), rose des orientations, lumière naturelle,
   méthode résumée.
@@ -109,13 +116,16 @@ fil des étapes : irradiation contre PVGIS, bilan thermique contre un calcul à 
 | `js/masks.js` | Grille de points par façade, profils d'horizon, ciel vu |
 | `js/results.js` | Indicateurs par façade, avec ou sans masques : annuel, mensuel, hiver / été, pic, apports vitrés |
 | `js/charts.js` | Échelle de couleurs, rose des orientations, barres mensuelles (SVG) |
-| `js/ui-results.js` | Onglet Exposition |
+| `js/ui-results.js` | Onglet Exposition solaire |
 | `js/instant.js` | Éclairement instantané et heures au-dessus de 300 W/m² (ciel clair ASHRAE), point par point |
 | `js/view3d.js` | Maquette 3D : modes de coloration, échelles, légendes et repères |
 | `js/thermal.js` | Bilan mensuel quasi-stationnaire (ISO 13790), protections solaires, préréglages de vitrage |
 | `js/ui-thermal.js` | Onglet Thermique : hypothèses, variantes, comparaison |
 | `js/daylight.js` | VSC (BRE) et facteur de lumière du jour moyen (formule BRE simplifiée) |
 | `js/ui-daylight.js` | Lumière naturelle (calcul pour la fiche offre ; l'onglet est retiré) |
+| `js/wind.js` | Vent : données ERA5, profil Eurocode, roses, pluie battante ISO 15927-3, Cp, heures d'ouverture |
+| `js/windsite.js` | Vent et géométrie : obstacle devant chaque façade, exposition, points de vigilance piétons |
+| `js/ui-wind.js` | Onglet Vent |
 | `js/messages.js` | Messages clés générés à partir des résultats |
 | `js/ui-report.js` | Fiche offre : deux pages A4 paysage, impression PDF |
 | `js/app.js` | Interface, onglets, enchaînement |
@@ -256,6 +266,51 @@ et copier le contenu du bloc `<pre id="out">` dans `js/climate-paris.js`.
   moyenne des obstacles pondérée par cos φ (approximation de l'angle de ciel visible).
 - **Validation** : VSC d'un mur dégagé 39,6 % ; obstruction infinie de 25° → 27,3 % (règle des 25° du
   BRE : 27 %) ; FLJm contre un calcul à la main.
+
+## Hypothèses et limites : vent
+
+> Outil d'enjeux pour la phase offre, **sans CFD ni soufflerie**. Les limites sont affichées dans
+> l'onglet Vent et rappelées sur la fiche.
+
+- **Données** : vent horaire (vitesse et direction à 10 m et 100 m), précipitations et température
+  de la réanalyse ERA5 2015–2024 (Open-Meteo, maille ≈ 0,25°, soit ≈ 30 km). ERA5 donne des
+  moyennes horaires : il **lisse les rafales** (1,5 à 2 fois la vitesse moyenne) et **ignore les
+  effets locaux** (rues, tours, relief fin) ; il sous-estime aussi les averses intenses.
+- **Profil vertical** (NF EN 1991-1-4 et annexe nationale) : la vitesse ERA5 à 10 m est prise comme
+  référence en terrain II, ramenée à la hauteur z du site par `c_r(z) / c_r,II(10 m)`, avec
+  `c_r(z) = k_r · ln(max(z, z_min) / z0)` et `k_r = 0,19 · (z0 / 0,05)^0,07`. Catégories 0, II, IIIa,
+  IIIb, IV (z0 = 0,005 à 1 m ; z_min = 1 à 15 m). Par défaut IV (ville dense) : sous 15 m, la vitesse
+  est celle de z_min.
+- **Rose des vents** : 16 secteurs, classes 0–2, 2–4, 4–6, 6–8, 8–10, > 10 m/s, à la hauteur du
+  bâtiment ; année et saisons météorologiques. Vents forts dominants : secteurs portant au moins 10 %
+  des heures au-dessus de 5 m/s à 10 m.
+- **Pluie battante** (NF EN ISO 15927-3, méthode des indices annuels) : `I_A = (2/9) · Σ v · r^(8/9) / N`
+  et, pour un mur de normale θ, `I_WA = (2/9) · Σ v · r^(8/9) · cos(D − θ) / N` sur les heures où le
+  vent vient vers le mur. `I_W = I_WA · C_R · C_T · O · W` : C_R = c_r à la hauteur (sommet, ou
+  mi-hauteur pour la partie courante), C_T = 1 (site plat), O selon la distance du premier obstacle
+  au moins aussi haut que le mur, cherché le long de la normale (tableau 3 : 0,2 sous 8 m … 1 au-delà
+  de 120 m), W = 0,5 sur les 2,5 m du haut, 0,2 en partie courante, 0,4 pour un bâtiment bas
+  (≤ 8 m). Classement BS 8104 : abritée < 33, modérée 33–56,5, sévère 56,5–100, très sévère > 100 L/m²·an.
+- **Ventilation naturelle** : Cp(θ) de Swami & Chandra (1988), normalisé, avec G = ln(longueur de la
+  façade / profondeur du bâtiment) et Cp(0) selon l'exposition (tables AIVC, Liddament 1986 :
+  exposé 0,7 ; semi-abrité 0,4 ; abrité 0,2). Exposition « auto » : élévation moyenne des obstacles
+  devant la façade (< 10° exposé, < 25° semi-abrité, sinon abrité). Cp moyen et part du temps au
+  vent sur les heures de vent > 1 m/s. Heures d'ouverture possibles : température et vent à
+  mi-hauteur dans les plages réglées (16–26 °C, 1–6 m/s par défaut), en option heures de bureau
+  (8 h–19 h, lundi–vendredi, heure légale). Corrélations de bâtiments bas isolés : ordre de grandeur
+  pour un immeuble en ville ; le tirage thermique n'est pas compté.
+- **Confort piéton** : carte qualitative, trois niveaux (faible, modéré, élevé), à partir de règles
+  connues de l'aéraulique urbaine : angles saillants face aux vents dominants (effet de coin), pied
+  des façades au vent d'un bâtiment plus haut que son voisinage (rabattement : H ≥ 18 m et 1,4 fois
+  la hauteur moyenne dans 100 m), passages de moins de 20 m alignés à ± 22,5° sur un vent dominant
+  (Venturi), pilotis ou passage sous le bâtiment (case à cocher), voisins de plus de deux fois la
+  hauteur du projet dans 80 m. **Une quantification (critères de Lawson, NEN 8100) demande des essais
+  en soufflerie ou une simulation CFD.**
+- **Validation** (`tests.html`, section 12) : facteur de hauteur égal à 1 à 10 m en terrain II ;
+  indices de pluie battante sur une série synthétique (une heure à 5 m/s et 1 mm → 10/9 L/m² ; mur à
+  60° → moitié ; mur sous le vent → 0) ; coefficient O ; classes BS 8104 ; Swami & Chandra à 0°, 90°
+  et 180° contre un calcul à la main ; rose ; heures d'ouverture sur un jour type ; distance au
+  premier obstacle sur un cas simple.
 
 ## Déployer
 

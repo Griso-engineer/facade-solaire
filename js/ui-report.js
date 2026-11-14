@@ -48,14 +48,16 @@
     if (!D.ok || !R) { ui.sheets.append(el('p', { class: 'muted' }, 'Sélectionnez un bâtiment et attendez le calcul.')); return; }
     const T = P.thermal, ref = TR ? TR[Math.min(T.ref, TR.length - 1)] : null;
     const msgs = FS.messages.generate({ P, D, R, TR, DL, climate: c });
+    if (FS.uiWind) FS.uiWind.ensureData();
+    const wmsgs = FS.uiWind ? FS.messages.wind(FS.uiWind.compute(), D, P) : [];
     const date = new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
     const title = P.name || 'Bâtiment étudié';
     const head = (sub) => el('header', { class: 'sh-head' },
       el('div', { class: 'sh-logo' }, 'tracés', el('i', {}, '.')),
-      el('div', { class: 'sh-title' }, el('b', {}, 'Enjeux solaires et thermiques des façades'), el('span', {}, sub)),
+      el('div', { class: 'sh-title' }, el('b', {}, 'Enjeux solaires, thermiques et de vent des façades'), el('span', {}, sub)),
       el('div', { class: 'sh-meta' }, el('b', {}, title), el('span', {}, shortAddr(P.address)), el('span', {}, date)));
     const foot = (n) => el('footer', { class: 'sh-foot' },
-      el('span', {}, 'Ordres de grandeur pour la phase offre : ni simulation thermique dynamique, ni calcul réglementaire, ni étude d\'éclairement.'),
+      el('span', {}, 'Ordres de grandeur pour la phase offre : ni simulation thermique dynamique, ni calcul réglementaire, ni étude d\'éclairement, ni étude aéraulique (CFD, soufflerie).'),
       el('span', {}, 'TRACÉS · Insolatio · bureau d\'études structures et façades · ' + n + '/2'));
 
     // ----- page 1 -----
@@ -69,14 +71,16 @@
     const mapBox = el('div', { class: 'sh-map' });
     const tbl = synthesisTable(R, ref, DL);
     const sheet1 = el('section', { class: 'sheet' },
-      head('Fiche d\'analyse : exposition, masques, apports, besoins, lumière'),
+      head('Fiche d\'analyse : exposition, masques, apports, besoins, lumière, vent'),
       el('div', { class: 'sh-body' },
         el('div', { class: 'sh-left' },
           el('figure', { class: 'sh-3d' }, snap ? el('img', { src: snap, alt: 'Maquette 3D' }) : el('div', { class: 'muted' }, '3D indisponible'),
             legend3d ? el('div', { class: 'sh-legend' }, legend3d) : null, el('figcaption', {}, viewTxt)),
           el('figure', { class: 'sh-mapfig' }, mapBox, el('figcaption', {}, 'Bâtiment étudié (corail), façades numérotées, voisins pris en compte dans un rayon de ' + P.radius + ' m.'))),
         el('div', { class: 'sh-right' },
-          el('div', { class: 'sh-msgs' }, el('h3', {}, 'Messages clés'), el('ol', {}, msgs.map((m) => el('li', {}, m.text)))),
+          el('div', { class: 'sh-msgs' }, el('h3', {}, 'Messages clés'), el('ol', {}, msgs.map((m) => el('li', {}, m.text))),
+            wmsgs.length ? el('h4', {}, 'Vent') : null,
+            wmsgs.length ? el('ol', { start: msgs.length + 1 }, wmsgs.map((m) => el('li', {}, m.text))) : null),
           el('div', { class: 'sh-table' }, el('h3', {}, 'Synthèse par façade'), tbl),
           el('div', { class: 'sh-hyp' }, el('h3', {}, 'Hypothèses principales'), el('p', {}, hypText(P, D, R, c, ref))))),
       foot(1));
@@ -174,7 +178,9 @@
       'réfléchi par le sol ; écart à PVGIS inférieur à 4 % sur des façades sud, est et ouest dégagées à Paris. Masques : profil d\'horizon au degré près en chaque point ' +
       'de façade (≈ 2 m × 3 m), voisins et bâtiment lui-même. Besoins : méthode mensuelle quasi-stationnaire (NF EN ISO 13790) sur une zone de façade, ' +
       'sans systèmes, ponts thermiques, planchers ni toiture. Lumière : VSC sous ciel couvert CIE (BRE 209), FLJm par la formule BRE simplifiée. ' +
-      'Détail et validation : onglet Méthode et tests de l\'outil.';
+      'Vent : ERA5 horaire 2015–2024 ramené à la hauteur par le profil de l\'Eurocode 1 ; pluie battante selon l\'ISO 15927-3 ; Cp de Swami & Chandra et tables AIVC ; ' +
+      'confort piéton en lecture qualitative, sans CFD ni soufflerie. ' +
+      'Détail et validation : documentation (README) et tests de l\'outil.';
   }
 
   function shortAddr(a) { return a ? a.split(',').slice(0, 3).join(',') : ''; }
